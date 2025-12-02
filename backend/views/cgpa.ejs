@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>CGPA Calculator</title>
+</head>
+<body>
+    <h1>CGPA Calculator</h1>
+
+    <form action="/cgpa" method="POST">
+        <div id="course-fields">
+            <div>
+                Grade Point: <input type="number" name="grades" step="0.01" required>
+                Credit: <input type="number" name="credits" step="0.5" required>
+            </div>
+        </div>
+
+        <button type="button" onclick="addField()">Add More Courses</button>
+        <br><br>
+        <button type="submit">Calculate</button>
+    </form>
+
+    <script>
+        function addField() {
+            const div = document.createElement("div");
+            div.innerHTML = `
+                Grade Point: <input type="number" name="grades" step="0.01" required>
+                Credit: <input type="number" name="credits" step="0.5" required>
+            `;
+            document.getElementById("course-fields").appendChild(div);
+        }
+    </script>
+
+    <% if (result) { %>
+        <h2>Your CGPA: <%= result %></h2>
+    <% } %>
+</body>
+</html>
