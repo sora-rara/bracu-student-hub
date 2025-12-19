@@ -39,12 +39,13 @@ exports.signup = async (req, res) => {
         // Auto-login after signup (set session)
         req.session.userId = user._id.toString();
 
-        // Return user data (without password)
+        // Return user data (with role and isAdmin)
         const userResponse = {
             id: user._id,
             name: user.name,
             email: user.email,
-            role: user.role
+            role: user.role,
+            isAdmin: user.role === 'admin'
         };
 
         res.status(201).json({
@@ -98,12 +99,13 @@ exports.login = async (req, res) => {
         // Set session
         req.session.userId = user._id.toString();
 
-        // Return user data (without password)
+        // Return user data (with role and isAdmin)
         const userResponse = {
             id: user._id,
             name: user.name,
             email: user.email,
-            role: user.role
+            role: user.role,
+            isAdmin: user.role === 'admin'
         };
 
         res.json({
@@ -150,7 +152,8 @@ exports.getCurrentUser = async (req, res) => {
                 id: user._id,
                 name: user.name,
                 email: user.email,
-                role: user.role
+                role: user.role,
+                isAdmin: user.role === 'admin'
             }
         });
     } catch (err) {
@@ -161,4 +164,22 @@ exports.getCurrentUser = async (req, res) => {
             error: err.message
         });
     }
+};
+
+// @desc    Logout user
+// @route   POST /api/auth/logout
+// @access  Private
+exports.logout = (req, res) => {
+    req.session.destroy((err) => {
+        if (err) {
+            return res.status(500).json({
+                success: false,
+                message: 'Failed to logout'
+            });
+        }
+        res.json({
+            success: true,
+            message: 'Logged out successfully'
+        });
+    });
 };
