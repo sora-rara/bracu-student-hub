@@ -1,0 +1,415 @@
+// controllers/gpaController.js
+const CourseGrade = require('../models/CourseGrade');
+const User = require('../models/User');
+
+// Helper function to update user's academic stats
+const updateUserAcademicStats = async (studentId) => {
+    try {
+        const user = await User.findById(studentId);
+        if (user) {
+            await user.updateAcademicStats();
+            return user;
+        }
+    } catch (err) {
+        console.error('Error updating user academic stats:', err);
+        throw err;
+    }
+};
+
+// Helper function to get grade point
+function getGradePoint(grade) {
+    const gradePoints = {
+        'A+': 4.0, 'A': 4.0, 'A-': 3.7,
+        'B+': 3.3, 'B': 3.0, 'B-': 2.7,
+        'C+': 2.3, 'C': 2.0, 'C-': 1.7,
+        'D+': 1.3, 'D': 1.0, 'D-': 0.7, 'F': 0.0
+    };
+    return gradePoints[grade] || 0;
+}
+
+// -------------------------------
+// Add Semester Grades (UPDATED)
+// -------------------------------
+exports.addSemesterGrades = async (req, res) => {
+    try {
+        const studentId = req.session.userId;
+        const { semester, year, courses } = req.body;
+
+        // Must be logged in
+        if (!studentId) {
+            return res.status(401).json({
+                success: false,
+                message: "Not authenticated. Please log in."
+            });
+        }
+
+        // Basic validation
+        if (!semester || !year || !courses || !Array.isArray(courses) || courses.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Semester, year, and at least one course are required."
+            });
+        }
+
+        // Validate course fields
+        const invalidCourse = courses.find(c =>
+            !c.courseCode || c.courseCode.trim() === "" ||
+            !c.grade || !c.creditHours
+        );
+
+        if (invalidCourse) {
+            return res.status(400).json({
+                success: false,
+                message: "Each course must include courseCode, grade, and creditHours."
+            });
+        }
+
+        // Create semester document
+        const newSemester = new CourseGrade({
+            studentId,
+            semester,
+            year,
+            courses: courses.map(course => ({
+                ...course,
+                courseCode: course.courseCode.trim(),
+                courseName: (course.courseName || '').trim(),
+                gradePoint: getGradePoint(course.grade)
+            }))
+        });
+
+        // This will trigger the pre-save hook to calculate GPA
+        await newSemester.save();
+
+        // Update user's academic statistics
+        const updatedUser = await updateUserAcademicStats(studentId);
+
+        return res.status(201).json({
+            success: true,
+            message: "Semester saved successfully to your profile.",
+            data: {
+                semester: newSemester,
+                academicStats: updatedUser?.academicStats || null,
+                studentId: studentId
+            }
+        });
+
+    } catch (err) {
+        console.error("Error in addSemesterGrades:", err);
+        return res.status(500).json({
+            success: false,
+            message: "Server error while saving semester: " + err.message
+        });
+    }
+};
+
+// -------------------------------
+// Delete Semester
+// -------------------------------
+exports.deleteSemester = async (req, res) => {
+    try {
+        const studentId = req.session.userId;
+        const { id } = req.params;
+
+        if (!studentId) {
+            return res.status(401).json({
+                success: false,
+                message: "Not authenticated"
+            });
+        }
+
+        const deleted = await CourseGrade.findOneAndDelete({ _id: id, studentId });
+
+        if (!deleted) {
+            return res.status(404).json({
+                success: false,
+                message: "Semester not found."
+            });
+        }
+
+        // Update user's academic statistics
+        await updateUserAcademicStats(studentId);
+
+        // Get updated user info
+        const updatedUser = await User.findById(studentId).select('academicStats');
+
+        return res.json({
+            success: true,
+            message: "Semester deleted successfully.",
+            data: {
+                academicStats: updatedUser?.academicStats || null
+            }
+        });
+
+    } catch (err) {
+        console.error("Error in deleteSemester:", err);
+        return res.status(500).json({
+            success: false,
+            message: "Server error while deleting semester."
+        });
+    }
+};
+
+// -------------------------------
+// Get All Semesters
+// -------------------------------
+exports.getAllSemesters = async (req, res) => {
+    try {
+        const studentId = req.session.userId;
+
+        if (!studentId) {
+            return res.status(401).json({
+                success: false,
+                message: "Not authenticated"
+            });
+        }
+
+        const semesters = await CourseGrade.find({ studentId })
+            .sort({ year: 1, semester: 1 });
+
+        return res.json({
+            success: true,
+            data: semesters,
+            count: semesters.length
+        });
+
+    } catch (err) {
+        console.error("Error in getAllSemesters:", err);
+        return res.status(500).json({
+            success: false,
+            message: "Server error while fetching semesters."
+        });
+    }
+};
+
+// -------------------------------
+// Get Single Semester
+// -------------------------------
+exports.getSemester = async (req, res) => {
+    try {
+        const studentId = req.session.userId;
+        const { id } = req.params;
+
+        if (!studentId) {
+            return res.status(401).json({
+                success: false,
+                message: "Not authenticated"
+            });
+        }
+
+        const semester = await CourseGrade.findOne({ _id: id, studentId });
+
+        if (!semester) {
+            return res.status(404).json({
+                success: false,
+                message: "Semester not found."
+            });
+        }
+
+        return res.json({
+            success: true,
+            data: semester
+        });
+
+    } catch (err) {
+        console.error("Error in getSemester:", err);
+        return res.status(500).json({
+            success: false,
+            message: "Server error while fetching semester."
+        });
+    }
+};
+
+// -------------------------------
+// Calculate CGPA
+// -------------------------------
+exports.calculateCGPA = async (req, res) => {
+    try {
+        const studentId = req.session.userId;
+        const { method } = req.query; // optional: accumulated (default) or sequential
+
+        if (!studentId) {
+            return res.status(401).json({
+                success: false,
+                message: "Not authenticated"
+            });
+        }
+
+        // First, get user's stored CGPA
+        const user = await User.findById(studentId).select('academicStats');
+
+        let cgpa;
+        let message = 'Using stored CGPA from user profile';
+
+        // If forced calculation is requested or no stored data
+        if (req.query.force === 'true' || !user?.academicStats?.cumulativeCGPA) {
+            message = 'Calculated fresh from semester data';
+
+            if (method === "sequential") {
+                cgpa = await CourseGrade.calculateSequentialCGPA(studentId);
+            } else {
+                cgpa = await CourseGrade.calculateAccumulatedCGPA(studentId);
+            }
+
+            // Update user's stats if different
+            if (user && Math.abs(user.academicStats.cumulativeCGPA - cgpa) > 0.01) {
+                await updateUserAcademicStats(studentId);
+            }
+        } else {
+            // Use stored CGPA
+            cgpa = user.academicStats.cumulativeCGPA;
+        }
+
+        return res.json({
+            success: true,
+            data: {
+                cgpa,
+                method: method || 'accumulated',
+                source: message,
+                lastCalculated: user?.academicStats?.lastCalculated,
+                totalCredits: user?.academicStats?.totalCredits,
+                totalSemesters: user?.academicStats?.totalSemesters
+            },
+            message: "CGPA calculated successfully"
+        });
+
+    } catch (err) {
+        console.error("Error in calculateCGPA:", err);
+        return res.status(500).json({
+            success: false,
+            message: "Server error while calculating CGPA."
+        });
+    }
+};
+
+// -------------------------------
+// Get User Academic Stats
+// -------------------------------
+exports.getAcademicStats = async (req, res) => {
+    try {
+        const studentId = req.session.userId;
+
+        if (!studentId) {
+            return res.status(401).json({
+                success: false,
+                message: "Not authenticated"
+            });
+        }
+
+        const user = await User.findById(studentId).select('academicStats name email role');
+
+        if (!user) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found."
+            });
+        }
+
+        // Optionally update stats if they're stale (older than 1 hour)
+        const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+        if (!user.academicStats.lastCalculated ||
+            new Date(user.academicStats.lastCalculated) < oneHourAgo) {
+            await updateUserAcademicStats(studentId);
+            // Refetch updated user
+            const updatedUser = await User.findById(studentId).select('academicStats name email role');
+            return res.json({
+                success: true,
+                data: updatedUser,
+                message: "Academic stats (freshly calculated)"
+            });
+        }
+
+        return res.json({
+            success: true,
+            data: user,
+            message: "Academic stats (from cache)"
+        });
+
+    } catch (err) {
+        console.error("Error in getAcademicStats:", err);
+        return res.status(500).json({
+            success: false,
+            message: "Server error while fetching academic stats."
+        });
+    }
+};
+
+// -------------------------------
+// Force Update Academic Stats
+// -------------------------------
+exports.forceUpdateAcademicStats = async (req, res) => {
+    try {
+        const studentId = req.session.userId;
+
+        if (!studentId) {
+            return res.status(401).json({
+                success: false,
+                message: "Not authenticated"
+            });
+        }
+
+        await updateUserAcademicStats(studentId);
+
+        const updatedUser = await User.findById(studentId).select('academicStats');
+
+        return res.json({
+            success: true,
+            data: updatedUser?.academicStats || null,
+            message: "Academic stats updated successfully"
+        });
+
+    } catch (err) {
+        console.error("Error in forceUpdateAcademicStats:", err);
+        return res.status(500).json({
+            success: false,
+            message: "Server error while updating academic stats."
+        });
+    }
+};
+
+// -------------------------------
+// Calculate GPA Preview (NEW)
+// -------------------------------
+exports.calculateGPAPreview = async (req, res) => {
+    try {
+        const { courses, semester, year } = req.body;
+
+        // Validation
+        if (!courses || !Array.isArray(courses) || courses.length === 0) {
+            return res.status(400).json({
+                success: false,
+                message: "Courses array is required"
+            });
+        }
+
+        // Calculate semester GPA
+        let totalPoints = 0;
+        let totalCredits = 0;
+
+        courses.forEach(course => {
+            const points = getGradePoint(course.grade);
+            totalPoints += points * course.creditHours;
+            totalCredits += course.creditHours;
+        });
+
+        const semesterGPA = totalCredits > 0 ? Number((totalPoints / totalCredits).toFixed(2)) : 0;
+
+        return res.json({
+            success: true,
+            data: {
+                semesterGPA,
+                totalCredits,
+                semester,
+                year,
+                coursesCount: courses.length
+            },
+            message: "GPA calculated successfully"
+        });
+
+    } catch (err) {
+        console.error("Error in calculateGPAPreview:", err);
+        return res.status(500).json({
+            success: false,
+            message: "Server error while calculating GPA preview."
+        });
+    }
+};
