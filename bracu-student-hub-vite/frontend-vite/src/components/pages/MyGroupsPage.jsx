@@ -10,6 +10,21 @@ function MyGroupsPage() {
     const [error, setError] = useState('');
     const [filter, setFilter] = useState('all'); // all, admin, member, pending
 
+    // Get current user once
+    const getCurrentUser = () => {
+        try {
+            const userStr = localStorage.getItem('user');
+            if (!userStr) return null;
+            return JSON.parse(userStr);
+        } catch (err) {
+            console.error('Error parsing user from localStorage:', err);
+            return null;
+        }
+    };
+
+    const currentUser = getCurrentUser();
+    const userId = currentUser?.id;
+
     useEffect(() => {
         fetchMyGroups();
     }, []);
@@ -20,6 +35,7 @@ function MyGroupsPage() {
             const response = await apiService.getUserGroups();
 
             if (response.success) {
+                console.log('Fetched groups:', response.data);
                 setGroups(response.data);
             }
         } catch (err) {
@@ -37,39 +53,113 @@ function MyGroupsPage() {
     };
 
     const getFilteredGroups = () => {
-        switch (filter) {
-            case 'admin':
-                return groups.filter(group =>
-                    group.members?.some(m => m.user?._id === JSON.parse(localStorage.getItem('user'))?.id && m.role === 'admin') ||
-                    group.creator === JSON.parse(localStorage.getItem('user'))?.id
-                );
-            case 'member':
-                return groups.filter(group =>
-                    group.members?.some(m => m.user?._id === JSON.parse(localStorage.getItem('user'))?.id && m.role === 'member')
-                );
-            case 'pending':
-                return groups.filter(group =>
-                    group.joinRequests?.some(r => r.user?._id === JSON.parse(localStorage.getItem('user'))?.id && r.status === 'pending')
-                );
-            default:
-                return groups;
-        }
+        if (!userId) return groups; // If no user, return all groups
+
+        console.log('Filtering with userId:', userId, 'filter:', filter);
+
+        const filtered = groups.filter(group => {
+            // Check if user is a member
+            const isMember = group.members?.some(member => {
+                const memberUserId = member.user?._id || member.user;
+                return memberUserId?.toString() === userId?.toString();
+            });
+
+            // Check if user is creator
+            const isCreator = group.creator?.toString() === userId?.toString();
+
+            // Check if user has pending request
+            const hasPendingRequest = group.joinRequests?.some(request => {
+                const requestUserId = request.user?._id || request.user;
+                return requestUserId?.toString() === userId?.toString() &&
+                    request.status === 'pending';
+            });
+
+            // Check user role in group
+            const userMember = group.members?.find(member => {
+                const memberUserId = member.user?._id || member.user;
+                return memberUserId?.toString() === userId?.toString();
+            });
+            const userRole = userMember?.role;
+
+            // Apply filter
+            switch (filter) {
+                case 'admin':
+                    // User is admin if they are creator OR have admin role
+                    return isCreator || userRole === 'admin';
+                case 'member':
+                    // User is a regular member (not creator, not admin)
+                    return isMember && !isCreator && userRole === 'member';
+                case 'pending':
+                    // User has pending join request
+                    return hasPendingRequest;
+                case 'all':
+                default:
+                    // Show groups where user is member OR has pending request
+                    return isMember || hasPendingRequest || isCreator;
+            }
+        });
+
+        console.log(`Filter result: ${filter} -> ${filtered.length} groups`);
+        return filtered;
     };
 
     const getStats = () => {
-        const user = JSON.parse(localStorage.getItem('user'));
-        const total = groups.length;
-        // MyGroupsPage.jsx - FIXED
-        const adminGroups = groups.filter(group =>
-            group.creator === user?.id  // ✅ Only creator, not admin role
-        ).length;
-        const memberGroups = groups.filter(group =>
-            group.members?.some(m => m.user?._id === user?.id && m.role === 'member')
-        ).length;
-        const studyGroups = groups.filter(g => g.type === 'study').length;
-        const transportGroups = groups.filter(g => g.type === 'transport').length;
+        if (!userId) {
+            return { total: 0, adminGroups: 0, memberGroups: 0, studyGroups: 0, transportGroups: 0 };
+        }
 
-        return { total, adminGroups, memberGroups, studyGroups, transportGroups };
+        const stats = {
+            total: 0,
+            adminGroups: 0,
+            memberGroups: 0,
+            studyGroups: 0,
+            transportGroups: 0,
+            pendingRequests: 0
+        };
+
+        groups.forEach(group => {
+            const isMember = group.members?.some(member => {
+                const memberUserId = member.user?._id || member.user;
+                return memberUserId?.toString() === userId?.toString();
+            });
+
+            const isCreator = group.creator?.toString() === userId?.toString();
+
+            const userMember = group.members?.find(member => {
+                const memberUserId = member.user?._id || member.user;
+                return memberUserId?.toString() === userId?.toString();
+            });
+            const userRole = userMember?.role;
+
+            const hasPendingRequest = group.joinRequests?.some(request => {
+                const requestUserId = request.user?._id || request.user;
+                return requestUserId?.toString() === userId?.toString() &&
+                    request.status === 'pending';
+            });
+
+            // Count total groups user is involved with
+            if (isMember || isCreator || hasPendingRequest) {
+                stats.total++;
+
+                // Count by type
+                if (group.type === 'study') stats.studyGroups++;
+                if (group.type === 'transport') stats.transportGroups++;
+
+                // Count by role/status
+                if (isCreator || userRole === 'admin') {
+                    stats.adminGroups++;
+                } else if (userRole === 'member') {
+                    stats.memberGroups++;
+                }
+
+                if (hasPendingRequest) {
+                    stats.pendingRequests++;
+                }
+            }
+        });
+
+        console.log('Calculated stats:', stats);
+        return stats;
     };
 
     const stats = getStats();
@@ -130,15 +220,23 @@ function MyGroupsPage() {
                         </div>
                     </div>
                 </div>
-                <div className="col-md-3 col-6">
+                <div className="col-md-2 col-6">
                     <div className="card stat-card">
                         <div className="card-body text-center">
-                            <h3><FaBook className="text-primary me-2" />{stats.studyGroups}</h3>
-                            <p className="text-muted mb-0">Study Groups</p>
+                            <h3 className="text-warning">{stats.pendingRequests}</h3>
+                            <p className="text-muted mb-0">Pending</p>
                         </div>
                     </div>
                 </div>
-                <div className="col-md-3 col-6">
+                <div className="col-md-2 col-6">
+                    <div className="card stat-card">
+                        <div className="card-body text-center">
+                            <h3><FaBook className="text-primary me-2" />{stats.studyGroups}</h3>
+                            <p className="text-muted mb-0">Study</p>
+                        </div>
+                    </div>
+                </div>
+                <div className="col-md-2 col-6">
                     <div className="card stat-card">
                         <div className="card-body text-center">
                             <h3><FaCar className="text-success me-2" />{stats.transportGroups}</h3>
@@ -151,7 +249,7 @@ function MyGroupsPage() {
             {/* Filters */}
             <div className="row mb-4">
                 <div className="col-12">
-                    <div className="btn-group" role="group">
+                    <div className="btn-group flex-wrap" role="group">
                         <button
                             className={`btn ${filter === 'all' ? 'btn-primary' : 'btn-outline-primary'}`}
                             onClick={() => setFilter('all')}
@@ -174,9 +272,12 @@ function MyGroupsPage() {
                             className={`btn ${filter === 'pending' ? 'btn-warning' : 'btn-outline-warning'}`}
                             onClick={() => setFilter('pending')}
                         >
-                            Pending Requests
+                            Pending ({stats.pendingRequests})
                         </button>
                     </div>
+                    <small className="text-muted mt-2 d-block">
+                        Showing {filteredGroups.length} of {stats.total} groups
+                    </small>
                 </div>
             </div>
 
@@ -202,19 +303,59 @@ function MyGroupsPage() {
                             </div>
                         </div>
                     ) : (
-                        <div className="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
-                            {filteredGroups.map(group => (
-                                <div key={group._id} className="col">
-                                    <GroupCard
-                                        group={group}
-                                        onLeaveGroup={handleLeaveGroup}
-                                    />
-                                </div>
-                            ))}
-                        </div>
+                        <>
+                            <div className="alert alert-info">
+                                <strong>Filter:</strong> {filter.charAt(0).toUpperCase() + filter.slice(1)} •
+                                <strong> Showing:</strong> {filteredGroups.length} groups
+                            </div>
+                            <div className="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
+                                {filteredGroups.map(group => (
+                                    <div key={group._id} className="col">
+                                        <GroupCard
+                                            group={group}
+                                            onLeaveGroup={handleLeaveGroup}
+                                        />
+                                    </div>
+                                ))}
+                            </div>
+                        </>
                     )}
                 </div>
             </div>
+
+            {/* Debug Info (remove in production) */}
+            {process.env.NODE_ENV === 'development' && (
+                <div className="row mt-4">
+                    <div className="col-12">
+                        <div className="card border-danger">
+                            <div className="card-header bg-danger text-white">
+                                <h6 className="mb-0">Debug Info</h6>
+                            </div>
+                            <div className="card-body">
+                                <p><strong>User ID:</strong> {userId || 'No user found'}</p>
+                                <p><strong>Current Filter:</strong> {filter}</p>
+                                <p><strong>Total Groups:</strong> {groups.length}</p>
+                                <p><strong>Filtered Groups:</strong> {filteredGroups.length}</p>
+                                <details>
+                                    <summary>All Groups (click to expand)</summary>
+                                    <pre className="mt-2" style={{ fontSize: '12px', maxHeight: '200px', overflow: 'auto' }}>
+                                        {JSON.stringify(groups.map(g => ({
+                                            id: g._id,
+                                            name: g.name,
+                                            creator: g.creator,
+                                            members: g.members?.map(m => ({
+                                                userId: m.user?._id || m.user,
+                                                role: m.role
+                                            })),
+                                            joinRequests: g.joinRequests
+                                        })), null, 2)}
+                                    </pre>
+                                </details>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             {/* Activity Stats */}
             {filteredGroups.length > 0 && (
@@ -232,7 +373,7 @@ function MyGroupsPage() {
                                             <div>
                                                 <h6>Total Members Across Groups</h6>
                                                 <p className="mb-0">
-                                                    {groups.reduce((total, group) => total + (group.members?.length || 0), 0)} members
+                                                    {filteredGroups.reduce((total, group) => total + (group.members?.length || 0), 0)} members
                                                 </p>
                                             </div>
                                         </div>
@@ -243,7 +384,7 @@ function MyGroupsPage() {
                                             <div>
                                                 <h6>Active Study Groups</h6>
                                                 <p className="mb-0">
-                                                    {groups.filter(g => g.type === 'study' && g.status === 'active').length} active
+                                                    {filteredGroups.filter(g => g.type === 'study' && g.status === 'active').length} active
                                                 </p>
                                             </div>
                                         </div>
@@ -254,7 +395,7 @@ function MyGroupsPage() {
                                             <div>
                                                 <h6>Active Transport Groups</h6>
                                                 <p className="mb-0">
-                                                    {groups.filter(g => g.type === 'transport' && g.status === 'active').length} active
+                                                    {filteredGroups.filter(g => g.type === 'transport' && g.status === 'active').length} active
                                                 </p>
                                             </div>
                                         </div>

@@ -1,11 +1,19 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import axios from '../../api/axios.jsx';
+import './WeeklyPlanning.css';
 
 const WeeklyPlanning = () => {
     const navigate = useNavigate();
-    const [currentWeek, setCurrentWeek] = useState(new Date());
-    const [selectedDate, setSelectedDate] = useState(new Date().toISOString().split('T')[0]);
+    const today = new Date();
+    const [currentWeek, setCurrentWeek] = useState(today);
+    const [selectedDate, setSelectedDate] = useState(() => {
+        const today = new Date();
+        const year = today.getFullYear();
+        const month = String(today.getMonth() + 1).padStart(2, '0');
+        const day = String(today.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    });
     const [selectedMealTime, setSelectedMealTime] = useState('lunch');
     const [selectedFoodItems, setSelectedFoodItems] = useState([]);
     const [weekMenus, setWeekMenus] = useState({});
@@ -13,6 +21,16 @@ const WeeklyPlanning = () => {
     const [availableFoodItems, setAvailableFoodItems] = useState([]);
     const [viewingDate, setViewingDate] = useState(null);
     const [saveSuccess, setSaveSuccess] = useState(false);
+    const [showSaveButton, setShowSaveButton] = useState(true);
+
+    // Helper function to get local date string
+    const getLocalDateString = (date) => {
+        const d = new Date(date);
+        const year = d.getFullYear();
+        const month = String(d.getMonth() + 1).padStart(2, '0');
+        const day = String(d.getDate()).padStart(2, '0');
+        return `${year}-${month}-${day}`;
+    };
 
     // Fetch available food items and week menus on component mount
     useEffect(() => {
@@ -26,22 +44,12 @@ const WeeklyPlanning = () => {
         setLoading(true);
 
         try {
-            // Calculate start and end of week
-            const startDate = new Date(currentWeek);
-            startDate.setDate(startDate.getDate() - startDate.getDay()); // Start from Sunday
-            startDate.setHours(0, 0, 0, 0);
-
-            const endDate = new Date(startDate);
-            endDate.setDate(startDate.getDate() + 6); // End on Saturday
-            endDate.setHours(23, 59, 59, 999);
-
-            const startDateStr = startDate.toISOString().split('T')[0];
-            const endDateStr = endDate.toISOString().split('T')[0];
-
-            console.log(`📅 Fetching menus for week: ${startDateStr} to ${endDateStr}`);
+            // Get Sunday of the current week
+            const sunday = getWeekStart(currentWeek);
+            console.log('📅 Week start (Sunday):', getLocalDateString(sunday));
 
             // Fetch each day individually since we don't have weekly endpoint
-            await fetchMenusDaily(startDate, endDate);
+            await fetchMenusDaily(sunday);
 
         } catch (error) {
             console.error('❌ ERROR FETCHING WEEK MENUS:', error);
@@ -52,16 +60,28 @@ const WeeklyPlanning = () => {
         }
     }, [currentWeek]);
 
-    // Fetch menus day by day - This is your actual working method
-    const fetchMenusDaily = async (startDate, endDate) => {
+    // Helper: Get Sunday of the week for any date
+    const getWeekStart = (date) => {
+        const d = new Date(date);
+        const day = d.getDay(); // 0 = Sunday, 1 = Monday, etc.
+        const diff = d.getDate() - day; // Adjust to Sunday
+        const sunday = new Date(d.setDate(diff));
+        sunday.setHours(0, 0, 0, 0);
+        return sunday;
+    };
+
+    // Fetch menus day by day
+    const fetchMenusDaily = async (startDate) => {
         const menusByDate = {};
         const promises = [];
 
-        // Create 7 days
+        // Create 7 days starting from Sunday
         for (let i = 0; i < 7; i++) {
             const date = new Date(startDate);
             date.setDate(startDate.getDate() + i);
-            const dateStr = date.toISOString().split('T')[0];
+            const dateStr = getLocalDateString(date);
+
+            console.log(`📅 Fetching menu for: ${dateStr} (${date.toLocaleDateString('en-US', { weekday: 'long' })})`);
 
             promises.push(
                 axios.get(`/cafeteria/menu/date/${dateStr}`)
@@ -347,14 +367,14 @@ const WeeklyPlanning = () => {
         }
     };
 
-    // FIXED: Database check function - removed weekly endpoint check
+    // FIXED: Database check function
     const checkDatabaseMenus = async () => {
         try {
             console.log('🔍 CHECKING DATABASE...');
 
             // Check today's menu as a test
-            const today = new Date().toISOString().split('T')[0];
-            const response = await axios.get(`/cafeteria/menu/date/${today}`);
+            const todayStr = getLocalDateString(new Date());
+            const response = await axios.get(`/cafeteria/menu/date/${todayStr}`);
 
             console.log('📊 DATABASE RESPONSE:', response.data);
 
@@ -404,11 +424,14 @@ const WeeklyPlanning = () => {
         const item = availableFoodItems.find(f => f._id === foodItemId);
         if (item && !selectedFoodItems.some(f => f._id === foodItemId)) {
             setSelectedFoodItems([...selectedFoodItems, item]);
+            setShowSaveButton(true);
         }
     };
 
     const handleRemoveFoodItem = (itemId) => {
-        setSelectedFoodItems(selectedFoodItems.filter(item => item._id !== itemId));
+        const newItems = selectedFoodItems.filter(item => item._id !== itemId);
+        setSelectedFoodItems(newItems);
+        setShowSaveButton(newItems.length > 0);
     };
 
     // Get meal items count for overview
@@ -445,16 +468,22 @@ const WeeklyPlanning = () => {
         return `${window.location.origin}/uploads/${imageName}`;
     };
 
-    // Generate week days
+    // FIXED: Generate week days correctly
     const getWeekDays = () => {
-        const days = [];
-        const current = new Date(currentWeek);
-        current.setDate(current.getDate() - current.getDay()); // Start from Sunday
+        console.log('🔄 Generating week days from:', getLocalDateString(currentWeek));
 
+        const days = [];
+        const startOfWeek = getWeekStart(currentWeek);
+
+        console.log('📅 Start of week (Sunday):', getLocalDateString(startOfWeek));
+
+        // Generate 7 days starting from Sunday
         for (let i = 0; i < 7; i++) {
-            const day = new Date(current);
-            day.setDate(current.getDate() + i);
+            const day = new Date(startOfWeek);
+            day.setDate(startOfWeek.getDate() + i);
             days.push(day);
+
+            console.log(`Day ${i}: ${getLocalDateString(day)} - ${day.toLocaleDateString('en-US', { weekday: 'long' })}`);
         }
 
         return days;
@@ -471,16 +500,22 @@ const WeeklyPlanning = () => {
         const newWeek = new Date(currentWeek);
         newWeek.setDate(newWeek.getDate() - 7);
         setCurrentWeek(newWeek);
+        console.log('⏪ Previous week:', getLocalDateString(newWeek));
     };
 
     const handleNextWeek = () => {
         const newWeek = new Date(currentWeek);
         newWeek.setDate(newWeek.getDate() + 7);
         setCurrentWeek(newWeek);
+        console.log('⏩ Next week:', getLocalDateString(newWeek));
     };
 
     const handleViewDay = (dateStr) => {
         console.log(`👁️ Viewing day: ${dateStr}`);
+        const date = new Date(dateStr);
+        console.log(`📅 Date object: ${getLocalDateString(date)}`);
+        console.log(`📅 Day of week: ${date.getDay()} (${date.toLocaleDateString('en-US', { weekday: 'long' })})`);
+
         setSelectedDate(dateStr);
         setSelectedMealTime('lunch');
         setViewingDate(dateStr);
@@ -494,7 +529,8 @@ const WeeklyPlanning = () => {
 
         const startFormatted = startDate.toLocaleDateString('en-US', {
             month: 'short',
-            day: 'numeric'
+            day: 'numeric',
+            year: 'numeric'
         });
 
         const endFormatted = endDate.toLocaleDateString('en-US', {
@@ -503,7 +539,7 @@ const WeeklyPlanning = () => {
             year: 'numeric'
         });
 
-        return `Week of ${startFormatted} - ${endFormatted}`;
+        return `Week: ${startFormatted} - ${endFormatted}`;
     };
 
     // Calculate statistics
@@ -553,20 +589,13 @@ const WeeklyPlanning = () => {
                 </div>
             </div>
 
-            {/* Debug Controls - UPDATED */}
-            <div className="debug-controls" style={{
-                padding: '15px',
-                backgroundColor: '#f0f7ff',
-                border: '2px dashed #4CAF50',
-                borderRadius: '8px',
-                margin: '20px 0'
-            }}>
-                <h4 style={{ marginTop: 0, color: '#2196F3' }}>🔧 Debug Tools</h4>
-                <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+            {/* Debug Controls */}
+            <div className="debug-controls">
+                <h4>🔧 Debug Tools</h4>
+                <div className="debug-tools-row">
                     <button
                         onClick={checkDatabaseMenus}
                         className="debug-btn"
-                        style={{ backgroundColor: '#2196F50', color: 'white', padding: '8px 16px' }}
                         disabled={loading}
                     >
                         🔍 Test Database
@@ -574,17 +603,39 @@ const WeeklyPlanning = () => {
                     <button
                         onClick={forceRefreshOverview}
                         className="refresh-btn"
-                        style={{ backgroundColor: '#FF9800', color: 'white', padding: '8px 16px' }}
                         disabled={loading}
                     >
                         🔄 Refresh Overview
                     </button>
-                    <div style={{ marginLeft: 'auto', color: '#666' }}>
+                    <div className="state-indicator">
                         <strong>State:</strong> {loading ? '⏳ Loading...' : '✅ Ready'}
-                        {saveSuccess && <span style={{ color: '#4CAF50', marginLeft: '10px' }}>✓ Saved!</span>}
+                        {saveSuccess && <span className="save-success">✓ Saved!</span>}
                     </div>
                 </div>
-                <div style={{ fontSize: '12px', color: '#666', marginTop: '10px' }}>
+
+                {/* Date Debug Info */}
+                <div className="date-debug-info">
+                    <strong>📅 Date Info:</strong>
+                    <div className="date-details">
+                        <div>
+                            <span>Today: </span>
+                            <code>{getLocalDateString(new Date())}</code>
+                            <span> ({new Date().toLocaleDateString('en-US', { weekday: 'long' })})</span>
+                        </div>
+                        <div>
+                            <span>Selected Date: </span>
+                            <code>{selectedDate}</code>
+                            <span> ({new Date(selectedDate).toLocaleDateString('en-US', { weekday: 'long' })})</span>
+                        </div>
+                        <div>
+                            <span>Week Start: </span>
+                            <code>{weekDays[0] ? getLocalDateString(weekDays[0]) : ''}</code>
+                            <span> ({weekDays[0]?.toLocaleDateString('en-US', { weekday: 'long' })})</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div className="debug-info">
                     <strong>Current Data:</strong> {Object.keys(weekMenus).length} days loaded | {availableFoodItems.length} food items available
                     <br />
                     <strong>API:</strong> Using /cafeteria/menu/date/ and /cafeteria/admin/menu
@@ -652,7 +703,7 @@ const WeeklyPlanning = () => {
                         `Planning for ${selectedDate} - ${selectedMealTime}`
                     }
                     {selectedFoodItems.length > 0 &&
-                        <span style={{ color: '#4CAF50', marginLeft: '10px' }}>
+                        <span className="item-count-badge">
                             ({selectedFoodItems.length} items selected)
                         </span>
                     }
@@ -662,10 +713,7 @@ const WeeklyPlanning = () => {
                     <>
                         <div className="selected-items-grid">
                             {selectedFoodItems.map(item => (
-                                <div key={item._id} className="selected-item-card" style={{
-                                    border: '2px solid #4CAF50',
-                                    backgroundColor: '#f0f7ff'
-                                }}>
+                                <div key={item._id} className="selected-item-card">
                                     <img
                                         src={getImageUrl(item.image)}
                                         alt={item.name}
@@ -675,7 +723,7 @@ const WeeklyPlanning = () => {
                                         }}
                                     />
                                     <div className="item-details">
-                                        <h4 style={{ color: '#2196F3' }}>{item.name}</h4>
+                                        <h4>{item.name}</h4>
                                         <p>৳{item.price?.toFixed(2) || '0.00'} • {item.category || 'Uncategorized'}</p>
                                     </div>
                                     <button
@@ -683,75 +731,76 @@ const WeeklyPlanning = () => {
                                         className="remove-btn"
                                         title="Remove item"
                                         disabled={loading}
-                                        style={{ backgroundColor: '#FF6B6B', color: 'white' }}
                                     >
                                         ✕
                                     </button>
                                 </div>
                             ))}
                         </div>
-                        <div className="action-buttons" style={{ marginTop: '20px' }}>
-                            <button
-                                onClick={handleSaveMenu}
-                                disabled={loading}
-                                className="save-btn"
-                                style={{
-                                    backgroundColor: '#4CAF50',
-                                    color: 'white',
-                                    padding: '12px 24px',
-                                    fontSize: '16px',
-                                    fontWeight: 'bold'
-                                }}
-                            >
-                                {loading ? '⏳ Saving...' : `💾 SAVE ${selectedMealTime.toUpperCase()} MENU`}
-                            </button>
-                            <button
-                                onClick={() => setSelectedFoodItems([])}
-                                className="clear-btn"
-                                disabled={loading}
-                                style={{
-                                    marginLeft: '10px',
-                                    padding: '12px 24px',
-                                    backgroundColor: '#666',
-                                    color: 'white'
-                                }}
-                            >
-                                Clear Selection
-                            </button>
+
+                        {/* Save Menu Button */}
+                        <div className="save-section">
+                            <div className="save-section-content">
+                                <div>
+                                    <h4 className="save-title">
+                                        Ready to Save Menu
+                                    </h4>
+                                    <p className="save-description">
+                                        Save {selectedFoodItems.length} items to {selectedDate} - {selectedMealTime}
+                                    </p>
+                                </div>
+                                <div className="save-buttons">
+                                    <button
+                                        onClick={handleSaveMenu}
+                                        disabled={loading}
+                                        className="save-menu-btn"
+                                    >
+                                        <span>💾</span>
+                                        {loading ? 'Saving...' : `SAVE ${selectedMealTime.toUpperCase()} MENU`}
+                                    </button>
+                                    <button
+                                        onClick={() => {
+                                            setSelectedFoodItems([]);
+                                            setShowSaveButton(false);
+                                        }}
+                                        className="clear-all-btn"
+                                        disabled={loading}
+                                    >
+                                        Clear All
+                                    </button>
+                                </div>
+                            </div>
                         </div>
                     </>
                 ) : (
-                    <div className="no-items-message" style={{
-                        padding: '30px',
-                        textAlign: 'center',
-                        backgroundColor: '#f9f9f9',
-                        borderRadius: '8px'
-                    }}>
-                        <p style={{ color: '#666', fontSize: '16px' }}>
+                    <div className="no-items-message">
+                        <p>
                             No items selected. Select food items from the dropdown above to create a menu.
                         </p>
+                        {showSaveButton && (
+                            <div className="save-note">
+                                <p>
+                                    <strong>Note:</strong> Add at least one food item to enable the Save Menu button.
+                                </p>
+                            </div>
+                        )}
                     </div>
                 )}
             </div>
 
             {/* Weekly Calendar View */}
-            <div className="weekly-calendar" style={{ marginTop: '30px' }}>
-                <h3 style={{ color: '#2196F3' }}>
+            <div className="weekly-calendar">
+                <h3>
                     📅 Weekly Overview
-                    <span style={{ fontSize: '14px', marginLeft: '10px', color: '#666' }}>
+                    <span className="stats-summary">
                         ({stats.daysPlanned} days planned with {stats.totalItemsPlanned} total items)
                     </span>
                 </h3>
 
-                <div className="calendar-grid" style={{
-                    display: 'grid',
-                    gridTemplateColumns: 'repeat(7, 1fr)',
-                    gap: '15px',
-                    marginTop: '15px'
-                }}>
+                <div className="calendar-grid">
                     {weekDays.map((day, index) => {
-                        const dateStr = day.toISOString().split('T')[0];
-                        const isToday = dateStr === new Date().toISOString().split('T')[0];
+                        const dateStr = getLocalDateString(day);
+                        const isToday = dateStr === getLocalDateString(new Date());
                         const isSelected = dateStr === selectedDate;
                         const dayMenus = weekMenus[dateStr] || { breakfast: [], lunch: [], dinner: [], snacks: [] };
 
@@ -761,67 +810,37 @@ const WeeklyPlanning = () => {
                         );
 
                         return (
-                            <div key={index} className={`day-card ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''}`}
-                                style={{
-                                    border: isToday ? '3px solid #FF9800' : isSelected ? '3px solid #2196F3' : '1px solid #ddd',
-                                    backgroundColor: dayTotal > 0 ? '#f0f7ff' : 'white',
-                                    borderRadius: '8px',
-                                    overflow: 'hidden'
-                                }}>
-                                <div className="day-header" style={{
-                                    backgroundColor: isToday ? '#FF9800' : isSelected ? '#2196F3' : '#f5f5f5',
-                                    color: isToday || isSelected ? 'white' : '#333',
-                                    padding: '10px',
-                                    textAlign: 'center'
-                                }}>
-                                    <div className="day-name" style={{ fontWeight: 'bold', fontSize: '14px' }}>
+                            <div key={index} className={`day-card ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''}`}>
+                                <div className="day-header">
+                                    <div className="day-name">
                                         {day.toLocaleDateString('en-US', { weekday: 'short' }).toUpperCase()}
                                     </div>
-                                    <div className="day-date" style={{ fontSize: '20px', fontWeight: 'bold' }}>
+                                    <div className="day-date">
                                         {day.getDate()}
                                     </div>
-                                    <div className="month-year" style={{ fontSize: '12px', opacity: 0.8 }}>
+                                    <div className="month-year">
                                         {day.toLocaleDateString('en-US', { month: 'short' })}
+                                        <div className="year">
+                                            {day.getFullYear()}
+                                        </div>
                                     </div>
                                 </div>
 
-                                <div className="day-meals" style={{ padding: '10px' }}>
+                                <div className="day-meals">
                                     {['breakfast', 'lunch', 'dinner', 'snacks'].map(meal => {
                                         const itemCount = getMealItemsCount(dateStr, meal);
                                         const items = getMealItems(dateStr, meal);
 
                                         return (
-                                            <div key={meal} className="meal-slot" style={{
-                                                display: 'flex',
-                                                justifyContent: 'space-between',
-                                                alignItems: 'center',
-                                                marginBottom: '5px',
-                                                padding: '5px',
-                                                backgroundColor: itemCount > 0 ? '#E8F5E9' : '#f5f5f5',
-                                                borderRadius: '4px',
-                                                position: 'relative'
-                                            }}
+                                            <div key={meal} className="meal-slot"
                                                 title={items.length > 0 ?
                                                     `${items.length} items in ${meal}: ${items.map(i => i.name).join(', ')}` :
                                                     `No items in ${meal}`
                                                 }>
-                                                <span className="meal-label" style={{
-                                                    fontWeight: 'bold',
-                                                    fontSize: '11px'
-                                                }}>
+                                                <span className="meal-label">
                                                     {meal.charAt(0).toUpperCase()}
                                                 </span>
-                                                <span className="item-count" style={{
-                                                    color: itemCount > 0 ? '#4CAF50' : '#999',
-                                                    fontWeight: 'bold',
-                                                    fontSize: '12px',
-                                                    backgroundColor: itemCount > 0 ? 'white' : 'transparent',
-                                                    padding: '1px 6px',
-                                                    borderRadius: '8px',
-                                                    border: itemCount > 0 ? '1px solid #4CAF50' : '1px solid #ddd',
-                                                    minWidth: '20px',
-                                                    textAlign: 'center'
-                                                }}>
+                                                <span className="item-count">
                                                     {itemCount}
                                                 </span>
                                             </div>
@@ -829,35 +848,15 @@ const WeeklyPlanning = () => {
                                     })}
                                 </div>
 
-                                <div className="day-actions" style={{
-                                    padding: '8px',
-                                    borderTop: '1px solid #eee',
-                                    display: 'flex',
-                                    justifyContent: 'space-between',
-                                    alignItems: 'center',
-                                    backgroundColor: '#f9f9f9'
-                                }}>
+                                <div className="day-actions">
                                     <button
                                         className="view-day-btn"
                                         onClick={() => handleViewDay(dateStr)}
                                         disabled={loading}
-                                        style={{
-                                            backgroundColor: '#2196F3',
-                                            color: 'white',
-                                            padding: '4px 8px',
-                                            borderRadius: '4px',
-                                            fontSize: '11px',
-                                            cursor: 'pointer',
-                                            border: 'none'
-                                        }}
                                     >
                                         View/Edit
                                     </button>
-                                    <div className="day-total" style={{
-                                        fontWeight: 'bold',
-                                        color: dayTotal > 0 ? '#4CAF50' : '#666',
-                                        fontSize: '12px'
-                                    }}>
+                                    <div className="day-total">
                                         Total: {dayTotal}
                                     </div>
                                 </div>
@@ -868,103 +867,39 @@ const WeeklyPlanning = () => {
             </div>
 
             {/* Statistics Section */}
-            <div className="planning-stats" style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(4, 1fr)',
-                gap: '20px',
-                marginTop: '30px',
-                padding: '20px',
-                backgroundColor: '#f5f5f5',
-                borderRadius: '10px'
-            }}>
-                <div className="stat-card" style={{
-                    textAlign: 'center',
-                    padding: '20px',
-                    backgroundColor: 'white',
-                    borderRadius: '8px',
-                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-                }}>
-                    <div className="stat-number" style={{
-                        fontSize: '32px',
-                        fontWeight: 'bold',
-                        color: '#2196F3'
-                    }}>
+            <div className="planning-stats">
+                <div className="stat-card">
+                    <div className="stat-number">
                         {availableFoodItems.length}
                     </div>
-                    <div className="stat-label" style={{
-                        marginTop: '8px',
-                        color: '#666',
-                        fontSize: '14px'
-                    }}>
+                    <div className="stat-label">
                         Available Items
                     </div>
                 </div>
 
-                <div className="stat-card" style={{
-                    textAlign: 'center',
-                    padding: '20px',
-                    backgroundColor: 'white',
-                    borderRadius: '8px',
-                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-                }}>
-                    <div className="stat-number" style={{
-                        fontSize: '32px',
-                        fontWeight: 'bold',
-                        color: stats.daysPlanned > 0 ? '#4CAF50' : '#FF9800'
-                    }}>
+                <div className="stat-card">
+                    <div className="stat-number" style={{ color: stats.daysPlanned > 0 ? '#4CAF50' : '#FF9800' }}>
                         {stats.daysPlanned}
                     </div>
-                    <div className="stat-label" style={{
-                        marginTop: '8px',
-                        color: '#666',
-                        fontSize: '14px'
-                    }}>
+                    <div className="stat-label">
                         Days Planned
                     </div>
                 </div>
 
-                <div className="stat-card" style={{
-                    textAlign: 'center',
-                    padding: '20px',
-                    backgroundColor: 'white',
-                    borderRadius: '8px',
-                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-                }}>
-                    <div className="stat-number" style={{
-                        fontSize: '32px',
-                        fontWeight: 'bold',
-                        color: stats.totalItemsPlanned > 0 ? '#4CAF50' : '#FF9800'
-                    }}>
+                <div className="stat-card">
+                    <div className="stat-number" style={{ color: stats.totalItemsPlanned > 0 ? '#4CAF50' : '#FF9800' }}>
                         {stats.totalItemsPlanned}
                     </div>
-                    <div className="stat-label" style={{
-                        marginTop: '8px',
-                        color: '#666',
-                        fontSize: '14px'
-                    }}>
+                    <div className="stat-label">
                         Total Items Planned
                     </div>
                 </div>
 
-                <div className="stat-card" style={{
-                    textAlign: 'center',
-                    padding: '20px',
-                    backgroundColor: 'white',
-                    borderRadius: '8px',
-                    boxShadow: '0 2px 4px rgba(0,0,0,0.1)'
-                }}>
-                    <div className="stat-number" style={{
-                        fontSize: '32px',
-                        fontWeight: 'bold',
-                        color: selectedFoodItems.length > 0 ? '#4CAF50' : '#FF9800'
-                    }}>
+                <div className="stat-card">
+                    <div className="stat-number" style={{ color: selectedFoodItems.length > 0 ? '#4CAF50' : '#FF9800' }}>
                         {selectedFoodItems.length}
                     </div>
-                    <div className="stat-label" style={{
-                        marginTop: '8px',
-                        color: '#666',
-                        fontSize: '14px'
-                    }}>
+                    <div className="stat-label">
                         Currently Selected
                     </div>
                 </div>

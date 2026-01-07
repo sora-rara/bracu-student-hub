@@ -231,160 +231,275 @@ const AddFoodItem = () => {
                 <h1>➕ Add Food Item</h1>
                 <p>Create a new food item for the cafeteria</p>
                 <div className="header-actions">
-                    <button onClick={handleCancel}>← Back to Dashboard</button>
+                    <button className="btn outline-btn" onClick={handleCancel}>
+                        ← Back to Dashboard
+                    </button>
                     <button
                         onClick={testFormDataPost}
-                        style={{
-                            marginLeft: '10px',
-                            backgroundColor: '#4CAF50',
-                            color: 'white',
-                            border: 'none',
-                            padding: '8px 16px',
-                            borderRadius: '4px',
-                            cursor: 'pointer'
-                        }}
+                        className="btn btn-success"
+                        style={{ marginLeft: '10px' }}
                     >
                         🧪 Test FormData
                     </button>
                 </div>
             </div>
 
-            <div className="admin-section">
-                <form onSubmit={handleSubmitFoodItem}>
-                    <div className="form-group">
-                        <label>Name *</label>
-                        <input
-                            type="text"
-                            name="name"
-                            value={newFoodItem.name}
-                            onChange={handleInputChange}
-                            required
-                            disabled={loading}
-                        />
-                    </div>
+            <div className="food-item-form-container">
+                <form onSubmit={handleSubmitFoodItem} className="food-form">
+                    {/* Basic Info Section */}
+                    <div className="form-section basic-info-section">
+                        <h3>Basic Information</h3>
+                        <div className="form-grid">
+                            <div className="form-group required-field">
+                                <label htmlFor="name">Name *</label>
+                                <input
+                                    type="text"
+                                    id="name"
+                                    name="name"
+                                    value={newFoodItem.name}
+                                    onChange={handleInputChange}
+                                    className="form-control"
+                                    required
+                                    disabled={loading}
+                                    placeholder="Enter food item name"
+                                />
+                            </div>
 
-                    <div className="form-row">
-                        <div className="form-group">
-                            <label>Category *</label>
-                            <select name="category" value={newFoodItem.category} onChange={handleInputChange} required disabled={loading}>
-                                <option value="main_course">Main Course</option>
-                                <option value="appetizer">Appetizer</option>
-                                <option value="dessert">Dessert</option>
-                                <option value="beverage">Beverage</option>
-                                <option value="side_dish">Side Dish</option>
-                                <option value="snack">Snack</option>
-                            </select>
+                            <div className="form-group required-field">
+                                <label htmlFor="category">Category *</label>
+                                <select 
+                                    id="category"
+                                    name="category" 
+                                    value={newFoodItem.category} 
+                                    onChange={handleInputChange} 
+                                    className="form-control" 
+                                    required 
+                                    disabled={loading}
+                                >
+                                    <option value="main_course">Main Course</option>
+                                    <option value="appetizer">Appetizer</option>
+                                    <option value="dessert">Dessert</option>
+                                    <option value="beverage">Beverage</option>
+                                    <option value="side_dish">Side Dish</option>
+                                    <option value="snack">Snack</option>
+                                </select>
+                            </div>
+
+                            <div className="form-group required-field">
+                                <label htmlFor="mealTime">Meal Time *</label>
+                                <select 
+                                    id="mealTime"
+                                    name="mealTime" 
+                                    value={newFoodItem.mealTime} 
+                                    onChange={handleInputChange} 
+                                    className="form-control" 
+                                    required 
+                                    disabled={loading}
+                                >
+                                    <option value="breakfast">Breakfast</option>
+                                    <option value="lunch">Lunch</option>
+                                    <option value="dinner">Dinner</option>
+                                    <option value="snacks">Snacks</option>
+                                </select>
+                            </div>
+
+                            <div className="form-group required-field price-input-group">
+                                <label htmlFor="price">Price (৳) *</label>
+                                <div className="price-input-wrapper">
+                                    <span className="currency-symbol">৳</span>
+                                    <input
+                                        type="number"
+                                        id="price"
+                                        name="price"
+                                        step="0.01"
+                                        min="0"
+                                        value={newFoodItem.price}
+                                        onChange={handleInputChange}
+                                        className="form-control"
+                                        required
+                                        disabled={loading}
+                                        placeholder="0.00"
+                                    />
+                                </div>
+                            </div>
                         </div>
+                    </div>
 
-                        <div className="form-group">
-                            <label>Meal Time *</label>
-                            <select name="mealTime" value={newFoodItem.mealTime} onChange={handleInputChange} required disabled={loading}>
-                                <option value="breakfast">Breakfast</option>
-                                <option value="lunch">Lunch</option>
-                                <option value="dinner">Dinner</option>
-                                <option value="snacks">Snacks</option>
-                            </select>
+                    {/* Description Section */}
+                    <div className="form-section description-section">
+                        <h3>Description</h3>
+                        <div className="form-grid">
+                            <div className="form-group">
+                                <label htmlFor="shortDescription">Short Description</label>
+                                <input
+                                    type="text"
+                                    id="shortDescription"
+                                    name="shortDescription"
+                                    value={newFoodItem.shortDescription}
+                                    onChange={handleInputChange}
+                                    className="form-control"
+                                    disabled={loading}
+                                    placeholder="Brief description (max 100 characters)"
+                                    maxLength="100"
+                                />
+                                <div className="char-count">
+                                    {newFoodItem.shortDescription.length}/100
+                                </div>
+                            </div>
+
+                            <div className="form-group">
+                                <label htmlFor="description">Full Description</label>
+                                <textarea
+                                    id="description"
+                                    name="description"
+                                    value={newFoodItem.description}
+                                    onChange={handleInputChange}
+                                    className="form-control"
+                                    rows="4"
+                                    disabled={loading}
+                                    placeholder="Detailed description of the food item"
+                                />
+                            </div>
                         </div>
                     </div>
 
-                    <div className="form-row">
+                    {/* Quantity Section */}
+                    <div className="form-section">
+                        <h3>Inventory</h3>
                         <div className="form-group">
-                            <label>Price *</label>
-                            <input
-                                type="number"
-                                step="0.01"
-                                name="price"
-                                value={newFoodItem.price}
-                                onChange={handleInputChange}
-                                required
-                                disabled={loading}
-                            />
+                            <label htmlFor="quantity">Quantity Available</label>
+                            <div className="quantity-input-group">
+                                <button 
+                                    type="button" 
+                                    className="quantity-btn" 
+                                    onClick={() => setNewFoodItem(prev => ({ ...prev, quantity: Math.max(0, prev.quantity - 1) }))}
+                                    disabled={loading}
+                                >
+                                    −
+                                </button>
+                                <input
+                                    type="number"
+                                    id="quantity"
+                                    name="quantity"
+                                    min="0"
+                                    value={newFoodItem.quantity}
+                                    onChange={handleInputChange}
+                                    className="form-control quantity-input"
+                                    disabled={loading}
+                                />
+                                <button 
+                                    type="button" 
+                                    className="quantity-btn" 
+                                    onClick={() => setNewFoodItem(prev => ({ ...prev, quantity: prev.quantity + 1 }))}
+                                    disabled={loading}
+                                >
+                                    +
+                                </button>
+                            </div>
                         </div>
-
-                        <div className="form-group">
-                            <label>Quantity</label>
-                            <input
-                                type="number"
-                                name="quantity"
-                                value={newFoodItem.quantity}
-                                onChange={handleInputChange}
-                                disabled={loading}
-                            />
-                        </div>
                     </div>
 
-                    <div className="form-group">
-                        <label>Description</label>
-                        <textarea
-                            name="description"
-                            value={newFoodItem.description}
-                            onChange={handleInputChange}
-                            rows="3"
-                            disabled={loading}
-                            placeholder="Detailed description of the food item"
-                        />
-                    </div>
-
-                    <div className="form-group">
-                        <label>Short Description</label>
-                        <input
-                            type="text"
-                            name="shortDescription"
-                            value={newFoodItem.shortDescription}
-                            onChange={handleInputChange}
-                            disabled={loading}
-                            placeholder="Brief description (max 100 characters)"
-                        />
-                    </div>
-
-                    <div className="form-group">
-                        <label>Image *</label>
-                        <input
-                            ref={fileInputRef}
-                            type="file"
-                            accept="image/*"
-                            onChange={handleImageUpload}
-                            required
-                            disabled={loading}
-                        />
-                        {selectedImagePreview && <img src={selectedImagePreview} alt="Preview" className="image-preview" />}
-                    </div>
-
-                    <div className="form-group">
-                        <label>Dietary Tags</label>
-                        <div className="tags">
+                    {/* Dietary Tags Section */}
+                    <div className="form-section dietary-tags-section">
+                        <h3>Dietary Tags</h3>
+                        <p className="help-text">Select all applicable dietary tags for this food item</p>
+                        <div className="tags-grid">
                             {['vegetarian', 'vegan', 'gluten_free', 'dairy_free', 'nut_free', 'spicy'].map(tag => (
-                                <label key={tag} className="tag-checkbox">
+                                <label 
+                                    key={tag} 
+                                    className={`tag-option ${newFoodItem.dietaryTags.includes(tag) ? 'selected' : ''}`}
+                                >
                                     <input
                                         type="checkbox"
                                         checked={newFoodItem.dietaryTags.includes(tag)}
                                         onChange={() => handleDietaryTagChange(tag)}
                                         disabled={loading}
                                     />
-                                    {tag.replace('_', ' ')}
+                                    <span>{tag.replace('_', ' ').toUpperCase()}</span>
                                 </label>
                             ))}
                         </div>
                     </div>
 
-                    <div className="form-group checkbox-group">
-                        <label className="checkbox-label">
-                            <input
-                                type="checkbox"
-                                name="featured"
-                                checked={newFoodItem.featured}
-                                onChange={handleInputChange}
-                                disabled={loading}
-                            />
-                            <span>Featured Item</span>
-                        </label>
+                    {/* Image Upload Section */}
+                    <div className="form-section image-section">
+                        <h3>Food Image *</h3>
+                        <div className="image-upload-section">
+                            <label className="file-upload-area">
+                                <input
+                                    ref={fileInputRef}
+                                    type="file"
+                                    accept="image/*"
+                                    onChange={handleImageUpload}
+                                    required
+                                    disabled={loading}
+                                />
+                                <div className="file-upload-label">
+                                    📸 Choose Image
+                                </div>
+                            </label>
+                            <p className="file-help-text">
+                                Upload a high-quality image of the food item<br />
+                                Max file size: 5MB | Supported formats: JPG, PNG, WebP
+                            </p>
+                            
+                            {selectedImagePreview && (
+                                <div className="image-preview-container">
+                                    <h4>Image Preview:</h4>
+                                    <img 
+                                        src={selectedImagePreview} 
+                                        alt="Food Preview" 
+                                        className="image-preview" 
+                                    />
+                                </div>
+                            )}
+                        </div>
                     </div>
 
-                    <div className="form-buttons">
-                        <button type="submit" disabled={loading}>
-                            {loading ? 'Adding...' : 'Add Food Item'}
+                    {/* Featured Item Section */}
+                    <div className="form-section featured-item-section">
+                        <h3>Featured Item</h3>
+                        <div className="toggle-container">
+                            <label className="toggle-switch">
+                                <input
+                                    type="checkbox"
+                                    name="featured"
+                                    checked={newFoodItem.featured}
+                                    onChange={handleInputChange}
+                                    disabled={loading}
+                                />
+                                <span className="toggle-slider"></span>
+                            </label>
+                            <span className="toggle-label">
+                                Mark as Featured Item
+                                <br />
+                                <small>Featured items appear prominently on the menu</small>
+                            </span>
+                        </div>
+                    </div>
+
+                    {/* Form Actions */}
+                    <div className="form-actions">
+                        <button 
+                            type="submit" 
+                            className="btn btn-primary"
+                            disabled={loading}
+                        >
+                            {loading ? (
+                                <>
+                                    <span className="spinner spinner-sm"></span>
+                                    Adding Food Item...
+                                </>
+                            ) : (
+                                '➕ Add Food Item'
+                            )}
                         </button>
-                        <button type="button" onClick={handleCancel} disabled={loading}>
+                        <button 
+                            type="button" 
+                            className="btn btn-outline" 
+                            onClick={handleCancel}
+                            disabled={loading}
+                        >
                             Cancel
                         </button>
                     </div>

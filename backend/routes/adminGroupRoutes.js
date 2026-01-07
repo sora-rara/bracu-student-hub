@@ -6,7 +6,8 @@ const {
     adminUpdatePostStatus,
     adminGetAllGroups,
     adminUpdateGroupStatus,
-    getGroupAnalytics
+    getGroupAnalytics,
+    adminDeletePost  // Make sure this is imported
 } = require('../controllers/adminGroupController');
 const { requireAdmin } = require('../middleware/adminMiddleware');
 
@@ -16,6 +17,7 @@ router.use(requireAdmin);
 // Need Posts Admin Routes
 router.get('/need-posts', adminGetAllNeedPosts);
 router.put('/need-posts/:id/status', adminUpdatePostStatus);
+router.delete('/need-posts/:id', adminDeletePost);  // This should work now
 
 // Groups Admin Routes
 router.get('/groups', adminGetAllGroups);

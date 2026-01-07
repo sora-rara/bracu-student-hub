@@ -1,6 +1,4 @@
-// Update Navbar.jsx - Add Find My Group dropdown in the correct position
 import React, { useState } from 'react';
-import { FaChevronDown, FaUsers, FaShieldAlt } from 'react-icons/fa';
 import { Link, useNavigate, useLocation } from 'react-router-dom';
 import authService from '../../services/auth.jsx';
 
@@ -8,10 +6,18 @@ function Navbar() {
   const navigate = useNavigate();
   const location = useLocation();
   const user = authService.getCurrentUser();
-  const [showCalendarDropdown, setShowCalendarDropdown] = useState(false);
-  const [showCafeteriaDropdown, setShowCafeteriaDropdown] = useState(false);
-  const [showGraduationDropdown, setShowGraduationDropdown] = useState(false);
-  const [showGroupsDropdown, setShowGroupsDropdown] = useState(false); // Add this
+
+  // Group dropdown states for students
+  const [activeDropdown, setActiveDropdown] = useState(null);
+
+  // Admin dropdown states
+  const [adminDropdowns, setAdminDropdowns] = useState({
+    calendar: false,
+    academics: false,
+    career: false,
+    groups: false,
+    cafeteria: false
+  });
 
   const handleLogout = async () => {
     await authService.logout();
@@ -21,190 +27,367 @@ function Navbar() {
   const isActive = (path) => location.pathname === path || location.pathname.startsWith(path + '/');
   const isAdmin = user && (user.role === 'admin' || user.isAdmin);
 
+  const toggleStudentDropdown = (dropdown) => {
+    setActiveDropdown(activeDropdown === dropdown ? null : dropdown);
+  };
+
+  const toggleAdminDropdown = (dropdown) => {
+    setAdminDropdowns(prev => ({
+      ...prev,
+      [dropdown]: !prev[dropdown]
+    }));
+  };
+
+  const closeAllDropdowns = () => {
+    setActiveDropdown(null);
+    setAdminDropdowns({ calendar: false, academics: false, career: false, groups: false, cafeteria: false });
+  };
+
+  // Student navigation structure
+  const studentNavigation = [
+    {
+      type: 'link',
+      to: '/dashboard',
+      label: 'Dashboard',
+    },
+    {
+      type: 'dropdown',
+      id: 'calendar',
+      label: 'Calendar',
+      items: [
+        { to: '/calendar', label: 'Main Calendar' },
+        { to: '/calendar/academic-dates', label: 'Academic Dates' },
+        { to: '/calendar/exam-schedule', label: 'Exam Schedule' },
+        { to: '/calendar/club-activities', label: 'Club Activities' },
+        { to: '/calendar/add-event', label: 'Add Event' },
+      ]
+    },
+    {
+      type: 'dropdown',
+      id: 'groups',
+      label: 'Find My Group',
+      items: [
+        { to: '/find-my-group', label: 'Browse All Posts' },
+        { to: '/find-my-group/create', label: 'Create New Post' },
+        { to: '/find-my-group/my-posts', label: 'My Posts' },
+        { to: '/find-my-group/my-groups', label: 'My Groups' },
+      ]
+    },
+    {
+      type: 'mega-dropdown',
+      id: 'academics',
+      label: 'Academics',
+      sections: [
+        {
+          title: 'Course Resources',
+          items: [
+            { to: '/course-content', label: 'Course Content' },
+            { to: '/course-reviews', label: 'Course Reviews' },
+            { to: '/my-uploads', label: 'My Uploads' },
+          ]
+        },
+        {
+          title: 'Textbook Exchange',
+          items: [
+            { to: '/textbooks', label: 'Browse Textbooks' },
+            { to: '/textbooks/create', label: 'List a Textbook' },
+            { to: '/textbooks/my-listings', label: 'My Listings' },
+            { to: '/textbooks/favorites', label: 'My Favorites' },
+          ]
+        },
+        {
+          title: 'Tools',
+          items: [
+            { to: '/gpa-calculator', label: 'GPA Calculator' },
+            { to: '/faculty-rating', label: 'Faculty Rating' },
+          ]
+        }
+      ]
+    },
+    {
+      type: 'mega-dropdown',
+      id: 'career',
+      label: 'Career',
+      sections: [
+        {
+          title: 'Opportunities',
+          items: [
+            { to: '/career/internships', label: 'Internships' },
+            { to: '/career/jobs', label: 'Part-Time Jobs' },
+            { to: '/career/saved-jobs', label: 'Saved Jobs' },
+          ]
+        },
+        {
+          title: 'Applications',
+          items: [
+            { to: '/career/my-applications', label: 'Internship Applications' },
+            { to: '/career/my-job-applications', label: 'Job Applications' },
+          ]
+        },
+        {
+          title: 'Scholarships',
+          items: [
+            { to: '/career/scholarships', label: 'Available Scholarships' },
+            { to: '/career/my-scholarship-applications', label: 'My Applications' },
+          ]
+        }
+      ]
+    },
+    {
+      type: 'mega-dropdown',
+      id: 'planning',
+      label: 'Planning',
+      sections: [
+        {
+          title: 'Academic Planning',
+          items: [
+            { to: '/routine', label: 'Routine' },
+            { to: '/deadlines', label: 'Deadlines' },
+            { to: '/free-labs', label: 'Free Labs' },
+            { to: '/questions', label: 'Q/A' },
+          ]
+        },
+        {
+          title: 'Financial Planning',
+          items: [
+            { to: '/budget', label: 'Budget' },
+          ]
+        },
+        {
+          title: 'Graduation Planning',
+          items: [
+            { to: '/graduation', label: 'Progress Dashboard' },
+            { to: '/graduation/remaining', label: 'Remaining Courses' },
+            { to: '/graduation/planner', label: 'Semester Planner' },
+          ]
+        }
+      ]
+    },
+    {
+      type: 'dropdown',
+      id: 'cafeteria',
+      label: 'Cafeteria',
+      items: [
+        { to: '/cafeteria/today-menu', label: "Today's Menu" },
+        { to: '/cafeteria/submit-review', label: 'Submit Review' },
+        { to: '/cafeteria/weekly-calendar', label: 'Weekly Calendar' },
+      ]
+    },
+    {
+      type: 'link',
+      to: '/profile',
+      label: 'Profile'
+    }
+  ];
+
+  // Admin navigation structure
+  const adminNavigation = [
+    {
+      type: 'link',
+      to: '/admin',
+      label: 'Admin Dashboard'
+    },
+    {
+      type: 'dropdown',
+      id: 'calendar',
+      label: 'Calendar',
+      items: [
+        { to: '/calendar', label: 'Main Calendar' },
+        { to: '/calendar/academic-dates', label: 'Academic Dates' },
+        { to: '/calendar/exam-schedule', label: 'Exam Schedule' },
+        { to: '/calendar/club-activities', label: 'Club Activities' },
+        { to: '/calendar/add-event', label: 'Add Event' },
+      ]
+    },
+    {
+      type: 'mega-dropdown',
+      id: 'academics',
+      label: 'Academics',
+      sections: [
+        {
+          title: 'Faculty Management',
+          items: [
+            { to: '/admin/faculty-management', label: 'Manage Faculty' },
+          ]
+        },
+        {
+          title: 'Course Management',
+          items: [
+            { to: '/course-content/admin', label: 'Course Content & Reviews' },
+          ]
+        }
+      ]
+    },
+    {
+      type: 'mega-dropdown',
+      id: 'career',
+      label: 'Career',
+      sections: [
+        {
+          title: 'Internship Admin',
+          items: [
+            { to: '/admin/career', label: 'Internship Dashboard' },
+            { to: '/admin/career/internships', label: 'Manage Internships' },
+            { to: '/admin/career/applications', label: 'Applications' },
+          ]
+        },
+        {
+          title: 'Job Admin',
+          items: [
+            { to: '/admin/career/jobs', label: 'Job Dashboard' },
+            { to: '/admin/career/jobs/create', label: 'Create New Job' },
+          ]
+        },
+        {
+          title: 'Scholarship Admin',
+          items: [
+            { to: '/admin/career/scholarships', label: 'Scholarship Dashboard' },
+            { to: '/admin/career/scholarships/create', label: 'Create New Scholarship' },
+          ]
+        }
+      ]
+    },
+    {
+      type: 'dropdown',
+      id: 'groups',
+      label: 'Community',
+      items: [
+        { to: '/find-my-group/moderation', label: 'Group Moderation' },
+
+      ]
+    },
+    {
+      type: 'dropdown',
+      id: 'cafeteria',
+      label: 'Cafeteria',
+      items: [
+        { to: '/cafeteria/admin', label: 'Manage Food Items' },
+        { to: '/cafeteria/admin/menu-planning', label: 'Weekly Planning' },
+        { to: '/cafeteria/admin/today-menu', label: "Today's Menu" },
+      ]
+    }
+  ];
+
+  const renderLink = (item, isStudent = true) => (
+    <Link
+      key={item.to}
+      to={item.to}
+      className={`nav-link ${isActive(item.to) ? 'active' : ''}`}
+      onClick={closeAllDropdowns}
+    >
+      {item.label}
+    </Link>
+  );
+
+  const renderDropdown = (item, isStudent = true) => {
+    const isOpen = isStudent
+      ? activeDropdown === item.id
+      : adminDropdowns[item.id];
+
+    const toggle = () => {
+      if (isStudent) {
+        toggleStudentDropdown(item.id);
+      } else {
+        toggleAdminDropdown(item.id);
+      }
+    };
+
+    return (
+      <div
+        key={item.id}
+        className="dropdown-container"
+      >
+        <button
+          className={`nav-link dropdown-toggle ${isOpen ? 'active' : ''}`}
+          onClick={toggle}
+        >
+          {item.label}
+          <span className={`dropdown-arrow ${isOpen ? 'active' : ''}`}>▼</span>
+        </button>
+
+        {isOpen && item.type === 'mega-dropdown' ? (
+          <div className={`dropdown-menu mega-menu ${item.sections.length > 2 ? 'triple-column' : ''}`}>
+            {item.sections.map((section, idx) => (
+              <div key={idx} className="mega-section">
+                <div className="mega-section-title">
+                  {section.title}
+                </div>
+                <div className="mega-section-items">
+                  {section.items.map((subItem, subIdx) => (
+                    <Link
+                      key={subIdx}
+                      to={subItem.to}
+                      className="dropdown-item"
+                      onClick={closeAllDropdowns}
+                    >
+                      {subItem.label}
+                    </Link>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        ) : isOpen && (
+          <div className="dropdown-menu">
+            {item.items.map((subItem, idx) => (
+              <Link
+                key={idx}
+                to={subItem.to}
+                className="dropdown-item"
+                onClick={closeAllDropdowns}
+              >
+                {subItem.label}
+              </Link>
+            ))}
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderNavItem = (item, isStudent = true) => {
+    switch (item.type) {
+      case 'link':
+        return renderLink(item, isStudent);
+      case 'dropdown':
+      case 'mega-dropdown':
+        return renderDropdown(item, isStudent);
+      default:
+        return null;
+    }
+  };
+
   return (
     <nav className="navbar">
       <div className="nav-container">
-        <Link to="/" className="nav-logo">
-          <span>🎓</span>
+        <Link to="/" className="nav-logo" onClick={closeAllDropdowns}>
           <span>BRACU Student Hub</span>
         </Link>
 
         <div className="nav-links">
           {user ? (
             <>
-              {isAdmin && (
-                <Link to="/admin" className={`nav-link admin-link ${isActive('/admin')}`}>
-                  <FaShieldAlt /> Admin Dashboard
-                </Link>
-              )}
-
-              {/* Calendar Dropdown */}
-              <div className="dropdown-container">
-                <button
-                  className={`nav-link dropdown-toggle ${showCalendarDropdown ? 'active' : ''}`}
-                  onClick={() => setShowCalendarDropdown(!showCalendarDropdown)}
-                  onMouseEnter={() => setShowCalendarDropdown(true)}
-                  onMouseLeave={() => setShowCalendarDropdown(false)}
-                >
-                  Calendar <FaChevronDown className={`dropdown-arrow ${showCalendarDropdown ? 'active' : ''}`} />
-                </button>
-                {showCalendarDropdown && (
-                  <div
-                    className="dropdown-menu"
-                    onMouseEnter={() => setShowCalendarDropdown(true)}
-                    onMouseLeave={() => setShowCalendarDropdown(false)}
-                  >
-                    <Link to="/calendar" className="dropdown-item" onClick={() => setShowCalendarDropdown(false)}>
-                      Main Calendar
-                    </Link>
-                    <Link to="/calendar/academic-dates" className="dropdown-item" onClick={() => setShowCalendarDropdown(false)}>
-                      Academic Dates
-                    </Link>
-                    <Link to="/calendar/exam-schedule" className="dropdown-item" onClick={() => setShowCalendarDropdown(false)}>
-                      Exam Schedule
-                    </Link>
-                    <Link to="/calendar/club-activities" className="dropdown-item" onClick={() => setShowCalendarDropdown(false)}>
-                      Club Activities
-                    </Link>
-                    <Link to="/calendar/add-event" className="dropdown-item" onClick={() => setShowCalendarDropdown(false)}>
-                      Add Event
-                    </Link>
-                  </div>
-                )}
-              </div>
-
-              {/* ✅ Find My Group Dropdown - VISIBLE TO BOTH ADMINS & STUDENTS */}
-              <div className="dropdown-container">
-                <button
-                  className={`nav-link dropdown-toggle ${showGroupsDropdown ? 'active' : ''}`}
-                  onClick={() => setShowGroupsDropdown(!showGroupsDropdown)}
-                  onMouseEnter={() => setShowGroupsDropdown(true)}
-                  onMouseLeave={() => setShowGroupsDropdown(false)}
-                >
-                  <FaUsers /> Find My Group <FaChevronDown className={`dropdown-arrow ${showGroupsDropdown ? 'active' : ''}`} />
-                </button>
-                {showGroupsDropdown && (
-                  <div
-                    className="dropdown-menu"
-                    onMouseEnter={() => setShowGroupsDropdown(true)}
-                    onMouseLeave={() => setShowGroupsDropdown(false)}
-                  >
-                    <Link to="/find-my-group" className="dropdown-item" onClick={() => setShowGroupsDropdown(false)}>
-                      Browse All Posts
-                    </Link>
-
-                    {/* Students can create posts, Admins can moderate */}
-                    {!isAdmin ? (
-                      <Link to="/find-my-group/create" className="dropdown-item" onClick={() => setShowGroupsDropdown(false)}>
-                        Create New Post
-                      </Link>
-                    ) : (
-                      <Link to="/find-my-group/moderation" className="dropdown-item" onClick={() => setShowGroupsDropdown(false)}>
-                        Moderate Posts
-                      </Link>
-                    )}
-
-                    <Link to="/find-my-group/my-posts" className="dropdown-item" onClick={() => setShowGroupsDropdown(false)}>
-                      My Posts
-                    </Link>
-                    <Link to="/find-my-group/my-groups" className="dropdown-item" onClick={() => setShowGroupsDropdown(false)}>
-                      My Groups
-                    </Link>
-
-                    {isAdmin && (
-                      <Link to="/find-my-group/analytics" className="dropdown-item" onClick={() => setShowGroupsDropdown(false)}>
-                        <FaShieldAlt /> Analytics
-                      </Link>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Student-only links (hidden from admin) */}
-              {!isAdmin && (
+              {isAdmin ? (
+                // ADMIN NAVIGATION
                 <>
-                  <Link to="/dashboard" className={`nav-link ${isActive('/dashboard')}`}>Dashboard</Link>
-                  <Link to="/gpa-calculator" className={`nav-link ${isActive('/gpa-calculator')}`}>GPA Calculator</Link>
-                  <Link to="/deadlines" className={`nav-link ${isActive('/deadlines')}`}>Deadlines</Link>
-
-                  {/* Graduation Planner Dropdown (ONLY FOR STUDENTS) */}
-                  <div className="dropdown-container">
-                    <button
-                      className={`nav-link dropdown-toggle ${showGraduationDropdown ? 'active' : ''}`}
-                      onClick={() => setShowGraduationDropdown(!showGraduationDropdown)}
-                      onMouseEnter={() => setShowGraduationDropdown(true)}
-                      onMouseLeave={() => setShowGraduationDropdown(false)}
-                    >
-                      Graduation Planner <FaChevronDown className={`dropdown-arrow ${showGraduationDropdown ? 'active' : ''}`} />
-                    </button>
-                    {showGraduationDropdown && (
-                      <div
-                        className="dropdown-menu"
-                        onMouseEnter={() => setShowGraduationDropdown(true)}
-                        onMouseLeave={() => setShowGraduationDropdown(false)}
-                      >
-                        <Link to="/graduation" className="dropdown-item" onClick={() => setShowGraduationDropdown(false)}>
-                          Progress Dashboard
-                        </Link>
-                        <Link to="/graduation/remaining" className="dropdown-item" onClick={() => setShowGraduationDropdown(false)}>
-                          Remaining Courses
-                        </Link>
-                        <Link to="/graduation/timeline" className="dropdown-item" onClick={() => setShowGraduationDropdown(false)}>
-                          Graduation Timeline
-                        </Link>
-                      </div>
-                    )}
-                  </div>
+                  {adminNavigation.map(item => renderNavItem(item, false))}
                 </>
+              ) : (
+                // STUDENT NAVIGATION
+                studentNavigation.map(item => renderNavItem(item, true))
               )}
 
-              {/* Cafeteria Dropdown (shared) */}
-              <div className="dropdown-container">
-                <button
-                  className={`nav-link dropdown-toggle ${showCafeteriaDropdown ? 'active' : ''}`}
-                  onClick={() => setShowCafeteriaDropdown(!showCafeteriaDropdown)}
-                  onMouseEnter={() => setShowCafeteriaDropdown(true)}
-                  onMouseLeave={() => setShowCafeteriaDropdown(false)}
-                >
-                  {isAdmin ? 'Cafeteria Admin' : 'Cafeteria'} <FaChevronDown className={`dropdown-arrow ${showCafeteriaDropdown ? 'active' : ''}`} />
-                </button>
-                {showCafeteriaDropdown && (
-                  <div
-                    className="dropdown-menu"
-                    onMouseEnter={() => setShowCafeteriaDropdown(true)}
-                    onMouseLeave={() => setShowCafeteriaDropdown(false)}
-                  >
-                    {isAdmin ? (
-                      <>
-                        <Link to="/cafeteria/admin" className="dropdown-item" onClick={() => setShowCafeteriaDropdown(false)}>Manage Food Items</Link>
-                        <Link to="/cafeteria/admin/menu-planning" className="dropdown-item" onClick={() => setShowCafeteriaDropdown(false)}>Weekly Planning</Link>
-                        <Link to="/cafeteria/admin/today-menu" className="dropdown-item" onClick={() => setShowCafeteriaDropdown(false)}>Today's Menu (Admin)</Link>
-                      </>
-                    ) : (
-                      <>
-                        <Link to="/cafeteria/today-menu" className="dropdown-item" onClick={() => setShowCafeteriaDropdown(false)}>Today's Menu</Link>
-                        <Link to="/cafeteria/submit-review" className="dropdown-item" onClick={() => setShowCafeteriaDropdown(false)}>Submit Review</Link>
-                        <Link to="/cafeteria/past-reviews" className="dropdown-item" onClick={() => setShowCafeteriaDropdown(false)}>Past Reviews</Link>
-                        <Link to="/cafeteria/weekly-calendar" className="dropdown-item" onClick={() => setShowCafeteriaDropdown(false)}>Weekly Calendar</Link>
-                      </>
-                    )}
-                  </div>
-                )}
-              </div>
-
-              {/* Profile (students only) */}
-              {!isAdmin && <Link to="/profile" className={`nav-link ${isActive('/profile')}`}>Profile</Link>}
-
-              {/* Notification Bell & Logout (shared) */}
-              {/* Add NotificationBell component here */}
+              {/* Shared logout and user info */}
               <button onClick={handleLogout} className="btn btn-outline">Logout</button>
-              <span className="nav-user">👤 {user.name} {isAdmin ? '(Admin)' : ''}</span>
+              <span className="nav-user">
+                👤 {user.name} {isAdmin ? '(Admin)' : ''}
+              </span>
             </>
           ) : (
             <>
-              <Link to="/" className={`nav-link ${isActive('/')}`}>Home</Link>
-              <Link to="/login" className={`nav-link ${isActive('/login')}`}>Login</Link>
-              <Link to="/signup" className={`nav-link ${isActive('/signup')}`}>Sign Up</Link>
+              <Link to="/" className={`nav-link ${isActive('/')}`} onClick={closeAllDropdowns}>Home</Link>
+              <Link to="/login" className={`nav-link ${isActive('/login')}`} onClick={closeAllDropdowns}>Login</Link>
+              <Link to="/signup" className={`nav-link ${isActive('/signup')}`} onClick={closeAllDropdowns}>Sign Up</Link>
             </>
           )}
         </div>

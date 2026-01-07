@@ -34,10 +34,6 @@ function GroupCard({ group, onLeaveGroup }) {
         }
     };
 
-    const getPrivacyIcon = () => {
-        return group.privacy === 'private' ? <FaLock title="Private" /> : <FaGlobe title="Public" />;
-    };
-
     const getStatusBadge = () => {
         const statusConfig = {
             'active': { color: 'var(--success)', label: 'Active', icon: '🟢' },
@@ -62,7 +58,13 @@ function GroupCard({ group, onLeaveGroup }) {
                         <div className="d-flex align-items-center gap-2">
                             {group.type === 'study' ? <FaBook className="text-primary" /> : <FaCar className="text-success" />}
                             <h5 className="mb-0">{group.name}</h5>
-                            {getPrivacyIcon()}
+
+                            {/* PRIVACY BADGE - ADDED HERE */}
+                            <span className={`badge ${group.privacy === 'private' ? 'bg-dark' : 'bg-info'}`}>
+                                {group.privacy === 'private' ? <FaLock className="me-1" /> : <FaGlobe className="me-1" />}
+                                {group.privacy}
+                            </span>
+
                             {getStatusBadge()}
                         </div>
                         <div className="text-muted">

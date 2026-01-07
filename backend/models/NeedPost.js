@@ -22,15 +22,15 @@ const needPostSchema = new mongoose.Schema({
     createdBy: {
         type: mongoose.Schema.Types.ObjectId,
         ref: 'User',
-        required: true
+        required: [true, 'CreatedBy is required'] // ✅ Better error message
     },
     createdByName: {
         type: String,
-        required: true
+        required: [true, 'CreatedByName is required']
     },
     createdByEmail: {
         type: String,
-        required: true
+        required: [true, 'CreatedByEmail is required']
     },
     createdByRole: {
         type: String,

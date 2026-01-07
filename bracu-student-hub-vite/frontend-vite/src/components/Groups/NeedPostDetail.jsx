@@ -32,12 +32,33 @@ function NeedPostDetail() {
     const [isExpressingInterest, setIsExpressingInterest] = useState(false);
     const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
 
-    // ✅ NEW: State to show/hide interested users
+    // NEW: State to show/hide interested users
     const [showInterestedUsers, setShowInterestedUsers] = useState(false);
 
     const user = authService.getCurrentUser();
     const isAdmin = user && (user.role === 'admin' || user.isAdmin);
     const isCreator = post?.createdBy?._id === user?.id || post?.createdBy === user?.id;
+
+    // Check if user session is valid
+    useEffect(() => {
+        const checkAuth = async () => {
+            try {
+                await apiService.checkAuth();
+            } catch (error) {
+                if (error.status === 401) {
+                    console.log('Session expired, redirecting to login');
+                    localStorage.removeItem('user');
+                    navigate('/login', {
+                        state: { from: `/find-my-group/${id}` }
+                    });
+                }
+            }
+        };
+
+        if (user) {
+            checkAuth();
+        }
+    }, [user, navigate, id]);
 
     useEffect(() => {
         fetchPostDetails();
@@ -87,7 +108,7 @@ function NeedPostDetail() {
         }
     };
 
-    // ✅ FIXED: Get groups created from this post
+    // ✅ Get groups created from this post
     const getGroupsFromThisPost = () => {
         if (!userGroups.length) return [];
 
@@ -215,6 +236,23 @@ function NeedPostDetail() {
     };
 
     const handleExpressInterest = async () => {
+        // First check if user is authenticated
+        if (!user) {
+            setError('You must be logged in to express interest. Redirecting to login...');
+            setTimeout(() => {
+                navigate('/login', {
+                    state: { from: `/find-my-group/${id}` }
+                });
+            }, 2000);
+            return;
+        }
+
+        // 🔐 PREVENT ADMINS FROM EXPRESSING INTEREST
+        if (isAdmin) {
+            setError('Admins cannot express interest in posts.');
+            return;
+        }
+
         if (!interestMessage.trim()) {
             setError('Please add a message to your interest request');
             return;
@@ -230,6 +268,9 @@ function NeedPostDetail() {
             setError('');
 
             console.log('Sending interest for post:', post._id);
+            console.log('Current user:', user);
+
+            // Make sure we have a valid session
             const response = await apiService.expressInterest(id, interestMessage);
 
             if (response.success) {
@@ -240,6 +281,25 @@ function NeedPostDetail() {
                 fetchPostDetails();
             }
         } catch (err) {
+            console.error('Express interest error:', err);
+
+            // Handle 401 specifically
+            if (err.status === 401 || err.message?.includes('Authentication') || err.message?.includes('Unauthorized')) {
+                setError('Your session has expired. Please log in again.');
+
+                // Clear local storage and redirect
+                setTimeout(() => {
+                    localStorage.removeItem('user');
+                    navigate('/login', {
+                        state: {
+                            from: `/find-my-group/${id}`,
+                            message: 'Session expired. Please log in again.'
+                        }
+                    });
+                }, 2000);
+                return;
+            }
+
             const errorMessage = err.response?.data?.message ||
                 err.message ||
                 'Failed to express interest';
@@ -250,11 +310,6 @@ function NeedPostDetail() {
             } else {
                 setError(errorMessage);
             }
-
-            console.error('Express interest error details:', {
-                error: err,
-                response: err.response?.data
-            });
         } finally {
             setIsExpressingInterest(false);
         }
@@ -309,15 +364,6 @@ function NeedPostDetail() {
     const approvedInterests = post.interestedUsers?.filter(i => i.status === 'approved') || [];
     const rejectedInterests = post.interestedUsers?.filter(i => i.status === 'rejected') || [];
 
-    console.log('Debug info:', {
-        isCreator,
-        postId: id,
-        userGroupsCount: userGroups.length,
-        groupsFromPostCount: groupsFromPost.length,
-        groupsFromPost,
-        pendingInterestsCount: pendingInterests.length
-    });
-
     return (
         <div className="container mt-4">
             {/* Back Button */}
@@ -360,8 +406,8 @@ function NeedPostDetail() {
                         </div>
 
                         <div className="d-flex gap-2">
-                            {/* 🔐 ONLY SHOW THESE TO NON-CREATORS */}
-                            {!isCreator && post.status === 'open' && (
+                            {/* 🔐 ONLY SHOW THESE TO NON-CREATORS AND NON-ADMINS */}
+                            {!isCreator && !isAdmin && post.status === 'open' && (
                                 <button
                                     className={`btn ${hasExpressedInterest ? 'btn-success' : 'btn-primary'}`}
                                     onClick={() => setShowInterestModal(true)}
@@ -384,8 +430,8 @@ function NeedPostDetail() {
                                 </button>
                             )}
 
-                            {/* 🔐 ONLY CREATOR CAN SEE THESE */}
-                            {isCreator && post.status === 'open' && (
+                            {/* 🔐 ONLY CREATOR CAN SEE THESE (NOT ADMIN) */}
+                            {isCreator && !isAdmin && post.status === 'open' && (
                                 <>
                                     {/* Show "Create Group" only if no groups exist yet */}
                                     {groupsFromPost.length === 0 ? (
@@ -401,7 +447,7 @@ function NeedPostDetail() {
                                         </span>
                                     )}
 
-                                    {/* ✅ FIXED: Always show Add Members button to creator (not just when pending interests exist) */}
+                                    {/* Always show Add Members button to creator (not just when pending interests exist) */}
                                     <button
                                         className="btn btn-warning"
                                         onClick={() => setShowAddMembersModal(true)}
@@ -434,7 +480,7 @@ function NeedPostDetail() {
                             {/* 🔐 Admins can view but not interact */}
                             {isAdmin && (
                                 <span className="badge bg-info">
-                                    <FaLock className="me-1" /> Admin View
+                                    <FaLock className="me-1" /> Admin View (Read Only)
                                 </span>
                             )}
                         </div>
@@ -520,13 +566,19 @@ function NeedPostDetail() {
                                         </small>
                                     </div>
                                 </div>
-                                {isCreator && (
+                                {isCreator && !isAdmin && (
                                     <div className="alert alert-info">
                                         <FaUser className="me-2" />
                                         <strong>You created this post.</strong>
                                         {post.status === 'open' ?
                                             ' You can create a group and add members from interested users.' :
                                             ' This post is no longer accepting new interests.'}
+                                    </div>
+                                )}
+                                {isAdmin && (
+                                    <div className="alert alert-warning">
+                                        <FaLock className="me-2" />
+                                        <strong>Admin View Only.</strong> You cannot interact with this post as an administrator.
                                     </div>
                                 )}
                             </div>
@@ -570,8 +622,8 @@ function NeedPostDetail() {
                         </div>
                     )}
 
-                    {/* 🔐 INTERESTED USERS SECTION - ONLY VISIBLE TO CREATOR */}
-                    {isCreator && (pendingInterests.length > 0 || approvedInterests.length > 0 || rejectedInterests.length > 0) && (
+                    {/* 🔐 INTERESTED USERS SECTION - ONLY VISIBLE TO CREATOR (NOT ADMIN) */}
+                    {isCreator && !isAdmin && (pendingInterests.length > 0 || approvedInterests.length > 0 || rejectedInterests.length > 0) && (
                         <div className="mb-4">
                             <div className="d-flex justify-content-between align-items-center mb-3">
                                 <h5 className="mb-0">
@@ -684,7 +736,7 @@ function NeedPostDetail() {
                     )}
 
                     {/* 🔐 Show count only to non-creators */}
-                    {!isCreator && post.interestedUsers && post.interestedUsers.length > 0 && (
+                    {!isCreator && !isAdmin && post.interestedUsers && post.interestedUsers.length > 0 && (
                         <div className="alert alert-secondary">
                             <FaLock className="me-2" />
                             <strong>{post.interestedUsers.length} person(s)</strong> have expressed interest in this post.
@@ -709,10 +761,10 @@ function NeedPostDetail() {
                 </div>
             </div>
 
-            {/* Express Interest Modal */}
-            {showInterestModal && !hasExpressedInterest && (
-                <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-                    <div className="modal-dialog">
+            {/* Express Interest Modal - Only for non-admins */}
+            {showInterestModal && !hasExpressedInterest && !isAdmin && (
+                <div className="modal-overlay">
+                    <div className="modal-content-wrapper">
                         <div className="modal-content">
                             <div className="modal-header">
                                 <h5 className="modal-title">Express Interest</h5>
@@ -769,10 +821,10 @@ function NeedPostDetail() {
                 </div>
             )}
 
-            {/* Create Group Modal */}
-            {showCreateGroupModal && (
-                <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-                    <div className="modal-dialog">
+            {/* Create Group Modal - Only for creators (not admins) */}
+            {showCreateGroupModal && !isAdmin && (
+                <div className="modal-overlay">
+                    <div className="modal-content-wrapper">
                         <div className="modal-content">
                             <div className="modal-header">
                                 <h5 className="modal-title">Create Group from Post</h5>
@@ -847,10 +899,10 @@ function NeedPostDetail() {
                 </div>
             )}
 
-            {/* Add Members Modal */}
-            {showAddMembersModal && isCreator && (
-                <div className="modal show d-block" tabIndex="-1" style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}>
-                    <div className="modal-dialog modal-lg">
+            {/* Add Members Modal - Only for creators (not admins) */}
+            {showAddMembersModal && isCreator && !isAdmin && (
+                <div className="modal-overlay">
+                    <div className="modal-lg-content-wrapper">
                         <div className="modal-content">
                             <div className="modal-header">
                                 <h5 className="modal-title">Add Members to Group</h5>
@@ -866,52 +918,22 @@ function NeedPostDetail() {
                                 ></button>
                             </div>
                             <div className="modal-body">
-                                {/* 🟢 ADDED: DEBUG INFO WITH GROUP TEST BUTTONS */}
-                                {groupsFromPost.length > 0 && (
-                                    <div className="alert alert-success mb-3">
-                                        <strong>✅ Groups found:</strong>
-                                        <ul className="mb-0">
-                                            {groupsFromPost.map(g => (
-                                                <li key={g._id} className="mb-2 d-flex align-items-center">
-                                                    <span className="me-2">{g.name} (ID: {g._id})</span>
-                                                    <button
-                                                        className="btn btn-sm btn-info ms-2"
-                                                        onClick={() => {
-                                                            console.log('Testing group:', g._id);
-                                                            apiService.getGroup(g._id)
-                                                                .then(res => console.log('Group API response:', res))
-                                                                .catch(err => console.error('Group API error:', err));
-                                                        }}
-                                                    >
-                                                        Test API
-                                                    </button>
-                                                </li>
-                                            ))}
-                                        </ul>
-                                    </div>
-                                )}
+                                {/* Removed debug info and test buttons - too complex for users */}
 
-                                {/* Debug info - remove in production */}
-                                <div className="alert alert-info small mb-3">
-                                    <strong>Debug Info:</strong>
-                                    <div>Groups found: {groupsFromPost.length}</div>
-                                    <div>Pending interests: {pendingInterests.length}</div>
-                                </div>
-
-                                {/* Group Selection */}
+                                {/* Group Selection - SIMPLIFIED */}
                                 <div className="mb-4">
-                                    <h6>1. Select a Group to Add Members To</h6>
+                                    <h6>Select Group</h6>
                                     {loadingGroups ? (
-                                        <div className="text-center">
-                                            <div className="spinner-border spinner-border-sm"></div>
-                                            <p className="mt-2">Loading groups...</p>
+                                        <div className="text-center py-3">
+                                            <div className="spinner-border spinner-border-sm text-primary"></div>
+                                            <p className="mt-2 text-muted">Loading groups...</p>
                                         </div>
                                     ) : groupsFromPost.length === 0 ? (
                                         <div className="alert alert-warning">
                                             <FaUsers className="me-2" />
                                             No groups found from this post. Please create a group first.
                                             <button
-                                                className="btn btn-sm btn-success mt-2"
+                                                className="btn btn-sm btn-success w-100 mt-2"
                                                 onClick={() => {
                                                     setShowAddMembersModal(false);
                                                     setShowCreateGroupModal(true);
@@ -921,39 +943,46 @@ function NeedPostDetail() {
                                             </button>
                                         </div>
                                     ) : (
-                                        <div className="list-group">
-                                            {groupsFromPost.map(group => (
-                                                <div
-                                                    key={group._id}
-                                                    className={`list-group-item list-group-item-action ${selectedGroup?._id === group._id ? 'active' : ''}`}
-                                                    onClick={() => setSelectedGroup(group)}
-                                                    style={{ cursor: 'pointer' }}
-                                                >
-                                                    <div className="d-flex justify-content-between align-items-center">
-                                                        <div>
-                                                            <strong>{group.name}</strong>
-                                                            <div className="small">
-                                                                {group.members?.length || 0}/{group.maxMembers} members • {group.type}
-                                                            </div>
-                                                            {group.description && (
-                                                                <div className="small text-muted mt-1">
-                                                                    {group.description.substring(0, 100)}...
-                                                                </div>
-                                                            )}
-                                                        </div>
-                                                        {selectedGroup?._id === group._id && <FaCheck className="text-success" />}
+                                        <div className="mb-3">
+                                            <label className="form-label">Choose a group:</label>
+                                            <select
+                                                className="form-select"
+                                                value={selectedGroup?._id || ''}
+                                                onChange={(e) => {
+                                                    const group = groupsFromPost.find(g => g._id === e.target.value);
+                                                    setSelectedGroup(group);
+                                                    setSelectedUsers([]); // Clear selection when group changes
+                                                }}
+                                            >
+                                                <option value="">Select a group...</option>
+                                                {groupsFromPost.map(group => (
+                                                    <option key={group._id} value={group._id}>
+                                                        {group.name} ({group.members?.length || 0}/{group.maxMembers} members)
+                                                    </option>
+                                                ))}
+                                            </select>
+                                            {selectedGroup && (
+                                                <div className="mt-2 small text-muted">
+                                                    {selectedGroup.description && (
+                                                        <div>{selectedGroup.description}</div>
+                                                    )}
+                                                    <div>
+                                                        Type: {selectedGroup.type} •
+                                                        Status: <span className={`badge ${selectedGroup.status === 'active' ? 'bg-success' : 'bg-secondary'}`}>
+                                                            {selectedGroup.status}
+                                                        </span>
                                                     </div>
                                                 </div>
-                                            ))}
+                                            )}
                                         </div>
                                     )}
                                 </div>
 
-                                {/* User Selection */}
+                                {/* User Selection - SIMPLIFIED */}
                                 {selectedGroup && pendingInterests.length > 0 && (
-                                    <div>
-                                        <h6>2. Select Users to Add (Pending: {pendingInterests.length})</h6>
-                                        <div className="list-group">
+                                    <div className="mb-4">
+                                        <h6>Select Users to Add ({pendingInterests.length} available)</h6>
+                                        <div className="border rounded p-3" style={{ maxHeight: '300px', overflowY: 'auto' }}>
                                             {pendingInterests.map((interest, index) => {
                                                 const isAlreadyMember = selectedGroup.members?.some(
                                                     member => {
@@ -962,36 +991,51 @@ function NeedPostDetail() {
                                                     }
                                                 );
 
+                                                const isSelected = selectedUsers.includes(interest.userId);
+
                                                 return (
                                                     <div
                                                         key={index}
-                                                        className={`list-group-item list-group-item-action ${selectedUsers.includes(interest.userId) ? 'active' : ''} ${isAlreadyMember ? 'disabled' : ''}`}
+                                                        className={`p-3 mb-2 border rounded ${isSelected ? 'border-primary bg-primary-light' : 'border-light'} ${isAlreadyMember ? 'opacity-50' : ''}`}
+                                                        style={{
+                                                            cursor: isAlreadyMember ? 'not-allowed' : 'pointer',
+                                                            backgroundColor: isSelected ? 'rgba(13, 110, 253, 0.1)' : 'transparent'
+                                                        }}
                                                         onClick={() => {
                                                             if (!isAlreadyMember) {
                                                                 toggleUserSelection(interest.userId);
                                                             }
                                                         }}
-                                                        style={{
-                                                            cursor: isAlreadyMember ? 'not-allowed' : 'pointer',
-                                                            opacity: isAlreadyMember ? 0.6 : 1
-                                                        }}
                                                     >
-                                                        <div className="d-flex justify-content-between align-items-center">
-                                                            <div>
-                                                                <strong>{interest.name}</strong>
-                                                                <div className="small text-muted">{interest.email}</div>
-                                                                {interest.message && (
-                                                                    <div className="small mt-1">
-                                                                        <em>"{interest.message}"</em>
+                                                        <div className="d-flex align-items-center">
+                                                            <div className="flex-grow-1">
+                                                                <div className="d-flex align-items-center">
+                                                                    {isSelected && (
+                                                                        <FaCheckCircle className="text-primary me-2" />
+                                                                    )}
+                                                                    <div>
+                                                                        <strong>{interest.name}</strong>
+                                                                        <div className="small text-muted">{interest.email}</div>
+                                                                        {interest.message && (
+                                                                            <div className="small mt-1">
+                                                                                <em>"{interest.message.substring(0, 80)}..."</em>
+                                                                            </div>
+                                                                        )}
                                                                     </div>
-                                                                )}
-                                                                {isAlreadyMember && (
-                                                                    <span className="badge bg-secondary mt-1">Already in group</span>
-                                                                )}
+                                                                </div>
                                                             </div>
                                                             <div>
-                                                                {selectedUsers.includes(interest.userId) && <FaCheck className="text-success" />}
-                                                                {isAlreadyMember && <FaCheck className="text-muted" />}
+                                                                {isAlreadyMember ? (
+                                                                    <span className="badge bg-secondary">Already member</span>
+                                                                ) : (
+                                                                    <input
+                                                                        type="checkbox"
+                                                                        className="form-check-input"
+                                                                        checked={isSelected}
+                                                                        onChange={() => toggleUserSelection(interest.userId)}
+                                                                        onClick={(e) => e.stopPropagation()}
+                                                                    />
+                                                                )}
                                                             </div>
                                                         </div>
                                                     </div>
@@ -1003,20 +1047,22 @@ function NeedPostDetail() {
 
                                 {selectedGroup && pendingInterests.length === 0 && (
                                     <div className="alert alert-info">
-                                        No pending interest requests to add.
+                                        <FaInfoCircle className="me-2" />
+                                        No pending interest requests to add to this group.
                                     </div>
                                 )}
 
-                                {/* Selected Summary */}
+                                {/* Selected Summary - SIMPLIFIED */}
                                 {selectedGroup && selectedUsers.length > 0 && (
-                                    <div className="alert alert-success mt-3">
-                                        <FaUserPlus className="me-2" />
-                                        <strong>Ready to add {selectedUsers.length} user{selectedUsers.length > 1 ? 's' : ''}</strong>
-                                        <div className="mt-1">
-                                            Group: <strong>"{selectedGroup.name}"</strong>
-                                        </div>
-                                        <div className="mt-2">
-                                            Selected users will be added and their interest status will be updated to "approved".
+                                    <div className="alert alert-success">
+                                        <div className="d-flex align-items-center">
+                                            <FaUserPlus className="me-2 fs-5" />
+                                            <div>
+                                                <strong>Ready to add {selectedUsers.length} member{selectedUsers.length > 1 ? 's' : ''}</strong>
+                                                <div className="small">
+                                                    Group: <strong>"{selectedGroup.name}"</strong>
+                                                </div>
+                                            </div>
                                         </div>
                                     </div>
                                 )}

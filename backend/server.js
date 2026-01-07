@@ -15,7 +15,7 @@ app.use(cors({
     credentials: true
 }));
 
-// ✅ Session configuration
+// Session configuration
 app.use(session({
     secret: 'student-hub-secret-key-2024',
     resave: false,
@@ -88,6 +88,7 @@ const cafeteriaRoutes = require('./routes/cafeteriaRoutes');
 
 // ====== IMPORT GRADUATION ROUTES ======
 const graduationRoutes = require('./routes/graduationRoutes');
+const semesterPlannerRoutes = require('./routes/semesterPlannerRoutes');
 
 
 // ====== IMPORT GROUP ROUTES ======
@@ -95,6 +96,31 @@ const needPostRoutes = require('./routes/needPostRoutes');
 const groupRoutes = require('./routes/groupRoutes');
 const notificationRoutes = require('./routes/notificationRoutes');
 const adminGroupRoutes = require('./routes/adminGroupRoutes');
+
+// ====== IMPORT BUDGET ROUTES ======
+const budgetRoutes = require('./routes/budgetRoutes');
+const courseReviewRoutes = require('./routes/courseReviewRoutes');
+const courseContentRoutes = require('./routes/courseContentRoutes'); // NEW
+
+const connectProxyRoutes = require('./routes/connectProxyRoutes');
+const freeLabRoutes = require('./routes/freeLabRoutes');
+const routinePickRoutes = require('./routes/routinePickRoutes');
+const questionRoutes = require("./routes/questionRoutes");
+
+// ====== IMPORT TEXTBOOK EXCHANGE ROUTES ======
+const textbookRoutes = require('./routes/textbookRoutes');
+
+
+const careerRoutes = require('./routes/careerRoutes');
+const studentCareerRoutes = require('./routes/studentCareerRoutes');
+const adminCareerRoutes = require('./routes/adminCareerRoutes');
+const applicationRoutes = require('./routes/applicationRoutes');
+const adminApplicationRoutes = require('./routes/adminApplicationRoutes');
+const ratingRoutes = require('./routes/ratingRoutes');
+const Faculty = require('./models/Faculty');
+const scholarshipRoutes = require('./routes/scholarshipRoutes');
+const adminScholarshipRoutes = require('./routes/adminScholarshipRoutes');
+const jobRoutes = require('./routes/jobRoutes');
 
 // ====================
 // FRONTEND REDIRECT MIDDLEWARE (ADDED HERE - BEFORE ROUTES)
@@ -141,9 +167,15 @@ app.use('/api/calendar', EventRoutes); // Let EventRoutes.js handle its own auth
 
 // ====== GRADUATION ROUTES ======
 app.use('/api/graduation', graduationRoutes);
+app.use('/api/semester-planner', semesterPlannerRoutes);
 
 // Mount routes under /api/deadlines
 app.use('/api/deadlines', deadlineRoutes);
+
+app.use('/api/connect', connectProxyRoutes);
+app.use('/api/labs', freeLabRoutes);
+app.use('/api/routine', routinePickRoutes);
+app.use("/api/questions", questionRoutes);
 
 // ====== GROUP ROUTES ======
 // Add these routes after other routes in server.js
@@ -151,6 +183,38 @@ app.use('/api/need-posts', needPostRoutes);
 app.use('/api/groups', groupRoutes);
 app.use('/api/notifications', notificationRoutes);
 app.use('/api/admin/groups', adminGroupRoutes);
+
+
+// ====== BUDGET ROUTES ======
+// Budget routes
+app.use('/api/budget', budgetRoutes);
+
+// Course Review routes
+app.use('/api/course-reviews', courseReviewRoutes);
+
+// Course Content routes
+app.use('/api/course-content', courseContentRoutes);
+
+// ====== TEXTBOOK EXCHANGE ROUTES ======
+app.use('/api/textbooks', textbookRoutes);
+
+// Career routes (public+protected)
+app.use('/api/career', careerRoutes);
+app.use('/api/career', studentCareerRoutes);
+app.use('/api/career/admin', requireAdmin, adminCareerRoutes);
+app.use('/api/applications', applicationRoutes);
+app.use('/api/admin/applications', requireAdmin, adminApplicationRoutes);
+
+// Rating routes
+app.use('/api/ratings', ratingRoutes);
+
+//Scholarship
+app.use('/api/career/admin/scholarships', adminScholarshipRoutes);
+app.use('/api/career/scholarships', scholarshipRoutes);
+app.use('/api/scholarships', scholarshipRoutes)
+
+//Job ROUTES
+app.use('/api/career/jobs', requireAuth, jobRoutes);
 
 // ====================
 // SEEDER ROUTE (For development only)
@@ -212,9 +276,57 @@ console.log('  GET  /api/graduation/timeline');
 console.log('  POST /api/graduation/courses/completed');
 console.log('  GET  /api/graduation/courses/:courseCode/prerequisites');
 console.log('  GET  /api/graduation/courses/recommended');
+console.log('\n📚 Textbook Exchange Routes:');
+console.log('  GET  /api/textbooks');
+console.log('  GET  /api/textbooks/stats');
+console.log('  GET  /api/textbooks/featured');
+console.log('  GET  /api/textbooks/search/:query');
+console.log('  GET  /api/textbooks/course/:courseCode');
+console.log('  GET  /api/textbooks/:id');
+console.log('  POST /api/textbooks');
+console.log('  PUT  /api/textbooks/:id');
+console.log('  DELETE /api/textbooks/:id');
+console.log('  PATCH /api/textbooks/:id/status');
+console.log('  POST /api/textbooks/:id/toggle-favorite');
+console.log('  GET  /api/textbooks/user/my-listings');
+console.log('  GET  /api/textbooks/user/favorites');
+
+console.log('  🎓 Career Routes:');
+console.log('  GET  /api/career/*');
+console.log('  🎓 Admin Career Routes:');
+console.log('  GET  /api/admin/career/test');
+console.log('  GET  /api/admin/career/dashboard/stats');
+console.log('  GET  /api/admin/career/opportunities');
+console.log('  POST /api/admin/career/opportunities');
+console.log('  PUT  /api/admin/career/opportunities/:type/:id');
+console.log('  DELETE /api/admin/career/opportunities/:type/:id');
+console.log('  GET  /api/admin/career/applications');
+console.log('  PUT  /api/admin/career/applications/:id');
+console.log('  GET  /api/admin/career/analytics');
+console.log('  GET  /api/admin/career/export/applications')
+console.log('  🎓 Faculty Rating Routes:');
+console.log('  GET  /api/ratings/test');
+console.log('  GET  /api/ratings/faculty-list');
+console.log('  GET  /api/ratings/faculty/:facultyId');
+console.log('  POST /api/ratings/submit');
+console.log('  POST /api/ratings/create-faculty');
+console.log('  DELETE /api/ratings/faculty/:id');
 console.log('\nFrontend redirects active:');
 console.log('  /cafeteria/* → /api/cafeteria/*');
 console.log('  /admin/* → /api/cafeteria/admin/*');
+console.log('  🎓 Scholarship Routes:');
+console.log('  GET  /api/scholarships');
+console.log('  GET  /api/scholarships/:id');
+console.log('  POST /api/scholarships/apply');
+console.log('  POST /api/scholarships');
+console.log('  PUT  /api/scholarships/:id');
+console.log('  DELETE /api/scholarships/:id');
+
+console.log('\nFrontend redirects active:');
+console.log('  /cafeteria/* → /api/cafeteria/*');
+console.log('  /admin/* → /api/cafeteria/admin/*');
+console.log('  GET  /api/connect/raw');
+console.log('  GET  /api/connect/health');
 
 // Add to your debug routes list
 console.log('\n🎯 Find My Group Routes:');
@@ -381,6 +493,44 @@ app.get('/api/calendar/test', (req, res) => {
     });
 });
 
+// ====================
+// BUDGET TEST ROUTES
+// ====================
+
+app.get('/api/budget/test-public', (req, res) => {
+    res.json({
+        success: true,
+        message: 'Budget API public test endpoint is working!',
+        timestamp: new Date().toISOString(),
+        endpoints: {
+            health: '/api/budget/health',
+            test: '/api/budget/test',
+            testAuth: '/api/budget/test-auth',
+            transactions: '/api/budget/transactions (protected)',
+            summary: '/api/budget/summary (protected)',
+            goals: '/api/budget/goals (protected)'
+        }
+    });
+});
+
+// ====================
+// COURSE-CONTENT TEST ROUTES
+// ====================
+
+app.get('/api/course-content/test', (req, res) => {
+    res.json({
+        success: true,
+        message: 'Course Content API is working!',
+        timestamp: new Date().toISOString(),
+        availableEndpoints: {
+            getAllCourses: 'GET /api/course-content/courses',
+            searchCourses: 'GET /api/course-content/courses/search?query=',
+            getContent: 'GET /api/course-content',
+            uploadContent: 'POST /api/course-content/upload',
+            downloadContent: 'GET /api/course-content/:id/download'
+        }
+    });
+});
 
 // ====================
 // DEBUG: Check if graduationRoutes is loaded
@@ -588,77 +738,91 @@ app.get("/", (req, res) => {
                 background: #2980b9;
             }
         </style>
-    </head>
-    <body>
-        <div class="container">
-            <h1>🎓 Student Hub Backend</h1>
-            <p>Backend server is running successfully!</p>
-            
-            <div class="grid">
-                <div class="card">
-                    <h3>🆕 New Features <span class="badge new">NEW</span></h3>
-                    <ul>
-                        <li><a href="/api/graduation/test">🎓 Graduation Planner API</a></li>
-                        <li><a href="/api/graduation/progress">Graduation Progress</a></li>
-                        <li><a href="/api/graduation/courses/remaining">Remaining Courses</a></li>
-                        <li><a href="/api/seed-programs">Seed Programs (Dev)</a></li>
-                    </ul>
-                </div>
-
-                <div class="card">
-                    <h3>🔐 Session Tests <span class="badge auth">AUTH</span></h3>
-                    <ul>
-                        <li><a href="/api/session-set-test">Set Test Session</a></li>
-                        <li><a href="/api/session-test">Test Session Persistence</a></li>
-                        <li><a href="/api/auth/check">Check Auth Status</a></li>
-                        <li><a href="/api/check-auth">Check Auth (Legacy)</a></li>
-                    </ul>
-                </div>
-
-                <div class="card">
-                    <h3>🧪 Test Endpoints <span class="badge test">TEST</span></h3>
-                    <ul>
-                        <li><a href="/api/test">Test API</a></li>
-                        <li><a href="/api/health">Health Check</a></li>
-                        <li><a href="/api/calendar/test">Calendar API Test</a></li>
-                        <li><a href="/api/cafeteria/health">Cafeteria Health</a></li>
-                        <li><a href="/api/graduation/test">Graduation Test</a></li>
-                    </ul>
-                </div>
-
-                <div class="card">
-                    <h3>📊 Core Services</h3>
-                    <ul>
-                        <li><a href="/api/calendar/events">Calendar Events</a></li>
-                        <li><a href="/api/cafeteria/menu/today">Today's Menu</a></li>
-                        <li><a href="/api/cafeteria/featured">Featured Items</a></li>
-                        <li><a href="/cgpa">CGPA Calculator</a></li>
-                        <li><a href="/public/uploads">View Uploads</a></li>
-                    </ul>
-                </div>
+</head>
+<body>
+    <div class="container">
+        <h1>🎓 Student Hub Backend</h1>
+        <p>Backend server is running successfully!</p>
+        
+        <div class="grid">
+            <div class="card">
+                <h3>🆕 New Features <span class="badge new">NEW</span></h3>
+                <ul>
+                    <li><a href="/api/graduation/test">🎓 Graduation Planner API</a></li>
+                    <li><a href="/api/graduation/progress">Graduation Progress</a></li>
+                    <li><a href="/api/graduation/courses/remaining">Remaining Courses</a></li>
+                    <li><a href="/api/seed-programs">Seed Programs (Dev)</a></li>
+                </ul>
             </div>
 
-            <div class="section">
-                <h3>Test Review Endpoint</h3>
-                <form action="/api/test-review" method="POST">
-                    <input type="text" name="foodItemId" placeholder="foodItemId" value="test123"><br>
-                    <input type="number" name="rating" placeholder="rating" value="5"><br>
-                    <input type="text" name="comment" placeholder="comment" value="Test comment"><br>
-                    <input type="text" name="studentName" placeholder="studentName" value="John"><br>
-                    <button type="submit">Test POST /api/test-review</button>
-                </form>
+            <div class="card">
+                <h3>🔐 Session Tests <span class="badge auth">AUTH</span></h3>
+                <ul>
+                    <li><a href="/api/session-set-test">Set Test Session</a></li>
+                    <li><a href="/api/session-test">Test Session Persistence</a></li>
+                    <li><a href="/api/auth/check">Check Auth Status</a></li>
+                    <li><a href="/api/check-auth">Check Auth (Legacy)</a></li>
+                </ul>
             </div>
 
-            <div class="section">
-                <h3>🚀 API Status</h3>
-                <p><strong>Database:</strong> ${mongoose.connection.readyState === 1 ? '✅ Connected' : '❌ Disconnected'}</p>
-                <p><strong>Environment:</strong> ${process.env.NODE_ENV || 'development'}</p>
-                <p><strong>Port:</strong> ${process.env.PORT || 5000}</p>
-                <p><strong>Frontend URLs:</strong> http://localhost:3000, http://localhost:5173</p>
+            <div class="card">
+                <h3>🧪 Test Endpoints <span class="badge test">TEST</span></h3>
+                <ul>
+                    <li><a href="/api/test">Test API</a></li>
+                    <li><a href="/api/health">Health Check</a></li>
+                    <li><a href="/api/calendar/test">Calendar API Test</a></li>
+                    <li><a href="/api/cafeteria/health">Cafeteria Health</a></li>
+                    <li><a href="/api/graduation/test">Graduation Test</a></li>
+                </ul>
+            </div>
+
+            <div class="card">
+                <h3>📊 Core Services</h3>
+                <ul>
+                    <li><a href="/api/calendar/events">Calendar Events</a></li>
+                    <li><a href="/api/cafeteria/menu/today">Today's Menu</a></li>
+                    <li><a href="/api/cafeteria/featured">Featured Items</a></li>
+                    <li><a href="/cgpa">CGPA Calculator</a></li>
+                    <li><a href="/public/uploads">View Uploads</a></li>
+                </ul>
+            </div>
+
+            <div class="card">
+                <h3>💰 Budget & Course APIs</h3>
+                <ul>
+                    <li><a href="/api/budget/test-public">Budget API Test</a></li>
+                    <li><a href="/api/budget/health">Budget Health Check</a></li>
+                    <li><a href="/api/course-reviews">Course Reviews</a></li>
+                    <li><a href="/api/course-reviews/courses/list">Course List</a></li>
+                    <li><a href="/api/course-content/test">Course Content Test</a></li>
+                    <li><a href="/api/course-content/courses">All Courses</a></li>
+                    <li><a href="/api/course-content">Course Content</a></li>
+                </ul>
             </div>
         </div>
-    </body>
-    </html>
+
+        <div class="section">
+            <h3>Test Review Endpoint</h3>
+            <form action="/api/test-review" method="POST">
+                <input type="text" name="foodItemId" placeholder="foodItemId" value="test123"><br>
+                <input type="number" name="rating" placeholder="rating" value="5"><br>
+                <input type="text" name="comment" placeholder="comment" value="Test comment"><br>
+                <input type="text" name="studentName" placeholder="studentName" value="John"><br>
+                <button type="submit">Test POST /api/test-review</button>
+            </form>
+        </div>
+
+        <div class="section">
+            <h3>🚀 API Status</h3>
+            <p><strong>Database:</strong> ${mongoose.connection.readyState === 1 ? '✅ Connected' : '❌ Disconnected'}</p>
+            <p><strong>Environment:</strong> ${process.env.NODE_ENV || 'development'}</p>
+            <p><strong>Port:</strong> ${process.env.PORT || 5000}</p>
+            <p><strong>Frontend URLs:</strong> http://localhost:3000, http://localhost:5173</p>
+        </div>
+    </div>
+</body>
+</html>
+
     `);
 });
 
@@ -680,6 +844,24 @@ app.get('/api/cafeteria/health', (req, res) => {
         }
     });
 });
+
+// Textbook exchange health endpoint
+app.get('/api/textbooks/health', (req, res) => {
+    res.json({
+        success: true,
+        service: 'textbook-exchange',
+        status: 'healthy',
+        timestamp: new Date().toISOString(),
+        endpoints: {
+            getAll: '/api/textbooks',
+            getStats: '/api/textbooks/stats',
+            getFeatured: '/api/textbooks/featured',
+            search: '/api/textbooks/search/:query',
+            getById: '/api/textbooks/:id'
+        }
+    });
+});
+
 
 // Legacy health endpoints (without /api prefix)
 app.get('/health', (req, res) => {
@@ -736,6 +918,17 @@ app.use((req, res) => {
     - GET  /api/graduation/courses/remaining
     - GET  /api/graduation/timeline
     - POST /api/graduation/courses/completed
+    - 📚  Textbook Exchange Routes:s
+    - GET  /api/textbooks
+    - GET  /api/textbooks/stats
+    - GET  /api/textbooks/featured
+    - GET  /api/textbooks/search/:query
+    - POST /api/textbooks
+    - GET  /api/textbooks/user/my-listings
+    ratingTest: '/api/ratings/test',
+    facultyList: '/api/ratings/faculty-list',
+    career: '/api/career',
+    adminCareerTest: '/api/admin/career/test',
     `;
 
     console.log(helpMessage);
@@ -754,7 +947,10 @@ app.use((req, res) => {
             adminFoodItems: '/api/cafeteria/admin/food-items',
             todayMenu: '/api/cafeteria/menu/today',
             graduationProgress: '/api/graduation/progress',
-            seedPrograms: '/api/seed-programs'
+            seedPrograms: '/api/seed-programs',
+            textbooks: '/api/textbooks',
+            textbookStats: '/api/textbooks/stats',
+            textbookFeatured: '/api/textbooks/featured'
         }
     });
 });
@@ -805,6 +1001,7 @@ const connectDBAndStartServer = async () => {
             console.log(`🎓  Graduation Test: http://localhost:${PORT}/api/graduation/test`);
             console.log(`🧮 CGPA Calc: http://localhost:${PORT}/cgpa`);
             console.log(`🌱 Seeder: http://localhost:${PORT}/api/seed-programs`);
+            console.log(`📚 Textbook Seeder: http://localhost:${PORT}/api/seed-textbooks`);
             console.log(`=================================`);
             console.log(`\n🔀 Frontend redirects active:`);
             console.log(`   /cafeteria/* → /api/cafeteria/*`);
@@ -813,6 +1010,43 @@ const connectDBAndStartServer = async () => {
             console.log(`\n📦 Session Storage: Memory Store`);
             console.log(`🔑 Note: Sessions will be lost on server restart`);
             console.log(`🌍 NODE_ENV: ${process.env.NODE_ENV || 'development'}`);
+            console.log('💰 Budget Routes:');
+            console.log('  GET  /api/budget/health');
+            console.log('  GET  /api/budget/test');
+            console.log('  GET  /api/budget/transactions');
+
+            console.log('📚 Course Review Routes:');
+            console.log('  GET  /api/course-reviews');
+            console.log('  POST /api/course-reviews');
+            console.log('  GET  /api/course-reviews/stats/:courseCode');
+            console.log('  GET  /api/course-reviews/courses/list');
+
+            console.log('\n📚 Textbook Exchange Routes:');
+            console.log('  GET  /api/textbooks');
+            console.log('  GET  /api/textbooks/stats');
+            console.log('  GET  /api/textbooks/featured');
+            console.log('  GET  /api/textbooks/search/:query');
+            console.log('  GET  /api/textbooks/course/:courseCode');
+            console.log('  GET  /api/textbooks/:id');
+            console.log('  POST /api/textbooks');
+            console.log('  PUT  /api/textbooks/:id');
+            console.log('  DELETE /api/textbooks/:id');
+            console.log('  PATCH /api/textbooks/:id/status');
+            console.log('  POST /api/textbooks/:id/toggle-favorite');
+            console.log('  GET  /api/textbooks/user/my-listings');
+            console.log('  GET  /api/textbooks/user/favorites');
+            console.log(`🎓 Career: http://localhost:${PORT}/api/career`);
+            console.log(`🎓 Admin Career Test: http://localhost:${PORT}/api/admin/career/test`);
+            console.log(`🎓 Rating API Test: http://localhost:${PORT}/api/ratings/test`);
+            console.log(`🎓 Faculty List: http://localhost:${PORT}/api/ratings/faculty-list`);
+
+            console.log('📁 Course Content Routes:');
+            console.log('  GET  /api/course-content');
+            console.log('  POST /api/course-content/upload');
+            console.log('  GET  /api/course-content/courses');
+            console.log('  GET  /api/course-content/courses/search');
+            console.log('  GET  /api/course-content/:id/download');
+
         });
     } catch (err) {
         console.error('❌ Failed to start server:', err.message);

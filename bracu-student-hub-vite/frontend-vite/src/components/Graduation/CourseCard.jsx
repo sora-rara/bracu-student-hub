@@ -2,9 +2,15 @@
 import React, { useState, useEffect } from 'react';
 import graduationService from '../../services/graduationService';
 
-const CourseCard = ({ course, showActions = true, onUpdate }) => {
+const CourseCard = ({ course, showActions = true, onToggleComplete, onUpdate }) => {
     const [prerequisites, setPrerequisites] = useState(null);
     const [loading, setLoading] = useState(false);
+    const [isLocallyCompleted, setIsLocallyCompleted] = useState(course.isCompleted || false);
+
+    // Sync with parent's course data
+    useEffect(() => {
+        setIsLocallyCompleted(course.isCompleted || false);
+    }, [course.isCompleted]);
 
     useEffect(() => {
         if (course.courseCode) fetchPrerequisites();
@@ -22,6 +28,33 @@ const CourseCard = ({ course, showActions = true, onUpdate }) => {
         }
     };
 
+    const handleToggleCompleteClick = async () => {
+        const newCompletedState = !isLocallyCompleted;
+        setIsLocallyCompleted(newCompletedState);
+
+        // Notify parent component
+        if (onToggleComplete) {
+            onToggleComplete(course.courseCode, newCompletedState);
+        }
+
+        // Optionally update backend
+        try {
+            // If you have an API endpoint to mark courses as completed
+            // await axios.post(`/api/courses/${course.courseCode}/complete`, {
+            //     completed: newCompletedState
+            // });
+
+            // Refresh prerequisites if needed
+            if (onUpdate) {
+                setTimeout(onUpdate, 100);
+            }
+        } catch (err) {
+            console.error('Error updating completion status:', err);
+            // Revert on error
+            setIsLocallyCompleted(!newCompletedState);
+        }
+    };
+
     const formatCourseCode = (code) => {
         if (!code) return '';
         if (code.match(/^[A-Z]{3}\d{3}$/)) return code.replace(/([A-Z]{3})(\d{3})/, '$1 $2');
@@ -29,13 +62,16 @@ const CourseCard = ({ course, showActions = true, onUpdate }) => {
     };
 
     const getStatusBadge = () => {
-        // Priority: isCompleted from database > canTake status
-        if (course.isCompleted) {
+        // Use local completion state
+        const isCompleted = isLocallyCompleted;
+        const canTake = Boolean(course.canTake) || isCompleted; // Completed courses are repeatable
+
+        if (isCompleted) {
             return <span className="badge bg-primary-lightest">Completed</span>;
         }
         if (course.status === 'ongoing') return <span className="badge bg-primary">Ongoing</span>;
-        if (course.canTake === false) return <span className="badge bg-primary-dark">Blocked</span>;
-        if (course.canTake === true) return <span className="badge bg-primary-light">Available</span>;
+        if (!canTake) return <span className="badge bg-primary-dark">Blocked</span>;
+        if (canTake) return <span className="badge bg-primary-light">Available</span>;
         return <span className="badge bg-primary">Not Started</span>;
     };
 
@@ -63,8 +99,8 @@ const CourseCard = ({ course, showActions = true, onUpdate }) => {
     };
 
     const renderPrerequisites = () => {
-        // Don't show prerequisites for completed courses
-        if (course.isCompleted) {
+        // Use local completion state
+        if (isLocallyCompleted) {
             return <small className="text-muted">Course completed</small>;
         }
 
@@ -113,8 +149,13 @@ const CourseCard = ({ course, showActions = true, onUpdate }) => {
         );
     };
 
+    // Get course status for CSS classes
+    const isCompleted = isLocallyCompleted;
+    const canTake = Boolean(course.canTake) || isCompleted;
+    const isBlocked = !isCompleted && !canTake;
+
     return (
-        <div className={`card course-card h-100 ${course.canTake === false ? 'blocked' : ''} ${course.isCompleted ? 'completed' : ''}`}>
+        <div className={`card course-card h-100 ${isBlocked ? 'blocked' : ''} ${isCompleted ? 'completed' : ''}`}>
             <div className="card-body">
                 <div className="d-flex justify-content-between align-items-start mb-2">
                     <div>
@@ -122,7 +163,7 @@ const CourseCard = ({ course, showActions = true, onUpdate }) => {
                         <h5 className="card-subtitle mb-2">{course.courseName}</h5>
                     </div>
                     <div className="d-flex flex-column align-items-end">
-                        <span className="badge bg-primary me-1 mb-1">{course.credits} Credits</span>
+                        <span className="badge bg-primary me-1 mb-1">{course.credits || 3} Credits</span>
                         {getStatusBadge()}
                     </div>
                 </div>
@@ -136,8 +177,10 @@ const CourseCard = ({ course, showActions = true, onUpdate }) => {
 
                 {renderPrerequisites()}
 
-                {showActions && !course.isCompleted && course.canTake === false && prerequisites?.missingHard?.length > 0 && (
-                    <div className="mt-3">
+                {/* Toggle Complete Button */}
+
+                {showActions && isBlocked && prerequisites?.missingHard?.length > 0 && (
+                    <div className="mt-2">
                         <small className="text-primary-dark">
                             <strong>Missing:</strong> {prerequisites.missingHard.map(code => formatCourseCode(code)).join(', ')}
                         </small>

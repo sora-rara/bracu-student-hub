@@ -1,6 +1,6 @@
 // controllers/adminGroupController.js
 const NeedPost = require('../models/NeedPost');
-const Group = require('../models/Group');
+const { Group } = require('../models/Group');  // FIXED: Destructure Group from the export
 const Notification = require('../models/Notification');
 
 // @desc    Admin: Get all posts with moderation features
@@ -115,6 +115,51 @@ exports.adminUpdatePostStatus = async (req, res) => {
         });
     } catch (err) {
         console.error("Admin update post status error:", err);
+        res.status(500).json({
+            success: false,
+            message: "Server error",
+            error: err.message
+        });
+    }
+};
+
+// @desc    Admin: Delete a post
+// @route   DELETE /api/admin/need-posts/:id
+// @access  Private/Admin
+exports.adminDeletePost = async (req, res) => {
+    try {
+        const post = await NeedPost.findById(req.params.id);
+
+        if (!post) {
+            return res.status(404).json({
+                success: false,
+                message: "Post not found"
+            });
+        }
+
+        // Delete post
+        await post.deleteOne();
+
+        // Notify post creator
+        if (post.createdBy) {
+            await Notification.create({
+                user: post.createdBy,
+                type: 'post_deleted',
+                title: 'Post Deleted',
+                message: `Your post "${post.title}" has been deleted by an administrator.`,
+                relatedTo: {
+                    modelType: 'NeedPost',
+                    itemId: post._id
+                }
+            });
+        }
+
+        res.json({
+            success: true,
+            message: "Post deleted successfully"
+        });
+    } catch (err) {
+        console.error("Admin delete post error:", err);
         res.status(500).json({
             success: false,
             message: "Server error",
@@ -248,6 +293,9 @@ exports.adminUpdateGroupStatus = async (req, res) => {
 // @desc    Admin: Get system analytics
 // @route   GET /api/admin/groups/analytics
 // @access  Private/Admin
+// @desc    Admin: Get system analytics
+// @route   GET /api/admin/groups/analytics
+// @access  Private/Admin
 exports.getGroupAnalytics = async (req, res) => {
     try {
         // Get total counts
@@ -329,4 +377,16 @@ exports.getGroupAnalytics = async (req, res) => {
             error: err.message
         });
     }
+
+
+
+    // Make sure to export it at the end
+    module.exports = {
+        adminGetAllNeedPosts,
+        adminUpdatePostStatus,
+        adminGetAllGroups,
+        adminUpdateGroupStatus,
+        getGroupAnalytics,
+        adminDeletePost  // Add this to exports
+    };
 };

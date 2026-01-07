@@ -87,9 +87,12 @@ const FoodItemCard = ({ item }) => {
           />
         </div>
 
+        {/* FIXED HEADER SECTION - Price moved closer */}
         <div className="food-item-header">
-          <h3>{item?.name || 'Unnamed Item'}</h3>
-          <span className="price">৳{item?.price?.toFixed(2) || '0.00'}</span>
+          <div className="food-item-header-top">
+            <h3 className="food-item-name">{item?.name || 'Unnamed Item'}</h3>
+            <span className="food-item-price">৳{item?.price?.toFixed(2) || '0.00'}</span>
+          </div>
         </div>
 
         <div className="food-item-details">

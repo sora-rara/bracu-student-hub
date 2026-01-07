@@ -2,6 +2,7 @@
 const express = require('express');
 const router = express.Router();
 const graduationController = require('../controllers/graduationController');
+const semesterPlannerRoutes = require('./semesterPlannerRoutes');
 
 // Add request logging
 router.use((req, res, next) => {
@@ -34,6 +35,8 @@ router.get('/courses/completed', graduationController.getCompletedCourses);
 
 // Sync grades with graduation planner
 router.post('/sync-grades', graduationController.syncGrades);
+
+router.use('/semester-planner', semesterPlannerRoutes);
 
 // Simple test endpoint
 router.get('/test', (req, res) => {

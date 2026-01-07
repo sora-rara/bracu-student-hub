@@ -1,4 +1,4 @@
-// src/components/Admin/AdminDashboard.js
+// src/components/Admin/AdminDashboard.jsx
 import React, { useState, useEffect, useCallback } from 'react';
 import axios from 'axios';
 import { format } from 'date-fns';
@@ -74,10 +74,7 @@ const AdminDashboard = () => {
 
     const checkAuthStatus = useCallback(async () => {
         try {
-            console.log('🔐 Checking authentication status...');
             const authResponse = await api.get('/api/auth/check');
-            console.log('Auth check:', authResponse.data);
-
             if (!authResponse.data.loggedIn) {
                 alert('Please log in first.');
                 window.location.href = '/login';
@@ -85,8 +82,6 @@ const AdminDashboard = () => {
             }
 
             const verifyResponse = await api.get('/api/auth/verify-session');
-            console.log('Admin verification:', verifyResponse.data);
-
             if (verifyResponse.data.isAdmin) {
                 setIsAdmin(true);
                 return true;
@@ -152,10 +147,7 @@ const AdminDashboard = () => {
         if (!isBackendConnected || !isAdmin) return;
         setLoading(true);
         try {
-            console.log('Fetching admin food items...');
             const response = await api.get('/api/cafeteria/admin/food-items');
-            console.log('Received admin food items:', response.data);
-
             let items = response.data?.data?.foodItems || response.data?.foodItems || [];
             setAdminFoodItems(items);
 
@@ -194,7 +186,6 @@ const AdminDashboard = () => {
         if (!isBackendConnected) return;
         try {
             await api.get('/api/cafeteria/menu/today');
-            console.log("Today's menu fetched successfully");
         } catch (error) {
             console.error("Error fetching today's menu:", error?.message || error);
         }
@@ -235,7 +226,6 @@ const AdminDashboard = () => {
         }
     };
 
-    // ✅ FIXED useEffect
     useEffect(() => {
         let isMounted = true;
 
@@ -257,33 +247,24 @@ const AdminDashboard = () => {
         };
 
         initializeDashboard();
-
-        return () => {
-            isMounted = false; // cleanup to prevent state updates on unmounted component
-        };
+        return () => { isMounted = false; };
     }, [checkAuthStatus, testBackendConnection, fetchAdminFoodItems, fetchTodaysMenu, isBackendConnected]);
 
     const testConnection = async () => {
         try {
-            console.log('Testing backend connection...');
             const authRes = await api.get('/api/auth/check');
-            console.log('Auth check:', authRes.data);
             const verifyRes = await api.get('/api/auth/verify-session');
-            console.log('Admin verification:', verifyRes.data);
             const healthRes = await api.get('/api/cafeteria/health');
-            console.log('Cafeteria health:', healthRes.data);
             const today = format(new Date(), 'yyyy-MM-dd');
             const menuRes = await api.get(`/api/cafeteria/menu/date/${today}`);
-            console.log('Menu check:', menuRes.data);
             alert('✅ All API endpoints are working! Check console for details.');
         } catch (error) {
-            console.error('Backend test failed:', error);
             alert(`❌ Test failed: ${error?.response?.data?.message || error.message}`);
         }
     };
 
     const CafeteriaStats = () => (
-        <div className="stats-grid">
+        <div className="stats-grid" style={{ marginBottom: '30px' }}>
             <div className="stat-card">
                 <div className="stat-icon">🍽️</div>
                 <div className="stat-content">
@@ -332,13 +313,13 @@ const AdminDashboard = () => {
                 <h1>🏛️ Admin Panel</h1>
                 <p>Manage cafeteria items and menus</p>
                 <div className="header-actions">
-                    <button onClick={testBackendConnection} disabled={loading}>
+                    <button onClick={testBackendConnection} disabled={loading} className="primary-btn">
                         {loading ? 'Testing...' : 'Test Connection'}
                     </button>
-                    <button onClick={testConnection} disabled={loading}>
+                    <button onClick={testConnection} disabled={loading} className="secondary-btn">
                         Quick API Test
                     </button>
-                    <button onClick={fetchAdminFoodItems} disabled={loading}>
+                    <button onClick={fetchAdminFoodItems} disabled={loading} className="outline-btn">
                         {loading ? 'Refreshing...' : 'Refresh Data'}
                     </button>
                 </div>
@@ -347,55 +328,84 @@ const AdminDashboard = () => {
             <div className="admin-content">
                 <div className="admin-section">
                     <h2>🏬 Cafeteria Dashboard</h2>
-                    <div className={`connection-status ${isBackendConnected ? 'connected' : 'disconnected'}`}>
+                    <div className={`connection-status ${isBackendConnected ? 'connected' : 'disconnected'}`} style={{ marginBottom: '20px' }}>
                         {connectionStatus}
                     </div>
 
                     <CafeteriaStats />
 
-                    <div className="items-table">
-                        <h3>All Food Items ({adminFoodItems.length})</h3>
+                    <div className="items-table" style={{ backgroundColor: 'white', padding: '20px', borderRadius: '8px', boxShadow: '0 2px 10px rgba(0,0,0,0.1)' }}>
+                        <h3 style={{ margin: '0 0 20px 0', paddingBottom: '10px', borderBottom: '2px solid #f0f0f0' }}>All Food Items ({adminFoodItems.length})</h3>
                         {adminFoodItems.length > 0 ? (
-                            <table>
-                                <thead>
-                                    <tr>
-                                        <th>Image</th>
-                                        <th>Name</th>
-                                        <th>Category</th>
-                                        <th>Price</th>
-                                        <th>Status</th>
-                                        <th>Actions</th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {adminFoodItems.map(item => (
-                                        <tr key={item._id || item.id}>
-                                            <td>
-                                                <img src={getImageUrl(item.image)} alt={item.name} className="item-thumbnail" />
-                                            </td>
-                                            <td>{item.name}</td>
-                                            <td>{item.category}</td>
-                                            <td>৳{item.price}</td>
-                                            <td>
-                                                <span className={`status-badge ${item.status}`}>{item.status}</span>
-                                            </td>
-                                            <td className="actions">
-                                                <button onClick={() => navigate(`/cafeteria/admin/edit-item/${item._id || item.id}`)}>
-                                                    ✏️ Edit
-                                                </button>
-                                                <button onClick={() => handleDeleteFoodItem(item._id || item.id, item.name)} className="delete-btn">
-                                                    🗑️ Delete
-                                                </button>
-                                                <button onClick={() => handleToggleFeatured(item._id || item.id, item.featured)}>
-                                                    {item.featured ? '⭐ Unfeature' : 'Mark Featured'}
-                                                </button>
-                                            </td>
+                            <div style={{ overflowX: 'auto' }}>
+                                <table style={{ width: '100%', borderCollapse: 'collapse', fontFamily: 'Arial, sans-serif' }}>
+                                    <thead>
+                                        <tr style={{ backgroundColor: '#f8f9fa', borderBottom: '2px solid #dee2e6' }}>
+                                            <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', color: '#333', width: '100px' }}>Image</th>
+                                            <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', color: '#333', minWidth: '150px' }}>Name</th>
+                                            <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', color: '#333', width: '120px' }}>Category</th>
+                                            <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', color: '#333', width: '100px' }}>Price</th>
+                                            <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', color: '#333', width: '100px' }}>Status</th>
+                                            <th style={{ padding: '12px', textAlign: 'left', fontWeight: '600', color: '#333', width: '200px' }}>Actions</th>
                                         </tr>
-                                    ))}
-                                </tbody>
-                            </table>
+                                    </thead>
+                                    <tbody>
+                                        {adminFoodItems.map(item => (
+                                            <tr key={item._id || item.id} style={{ borderBottom: '1px solid #e9ecef', transition: 'background-color 0.2s' }}>
+                                                <td style={{ padding: '12px', verticalAlign: 'middle' }}>
+                                                    <img
+                                                        src={getImageUrl(item.image)}
+                                                        alt={item.name}
+                                                        style={{
+                                                            width: '80px',
+                                                            height: '60px',
+                                                            objectFit: 'cover',
+                                                            borderRadius: '6px',
+                                                            border: '1px solid #ddd'
+                                                        }}
+                                                        onError={(e) => { e.target.onerror = null; e.target.src = 'https://via.placeholder.com/80x60?text=No+Image'; }}
+                                                    />
+                                                </td>
+                                                <td style={{ padding: '12px', verticalAlign: 'middle', fontWeight: '500' }}>
+                                                    <div style={{ display: 'flex', flexDirection: 'column' }}>
+                                                        <span style={{ fontWeight: '600' }}>{item.name}</span>
+                                                        {item.featured && (
+                                                            <span style={{ fontSize: '12px', color: '#e6b400', backgroundColor: '#fff9e6', padding: '2px 6px', borderRadius: '4px', marginTop: '4px', width: 'fit-content' }}>⭐ Featured</span>
+                                                        )}
+                                                    </div>
+                                                </td>
+                                                <td style={{ padding: '12px', verticalAlign: 'middle' }}>
+                                                    <span style={{ padding: '4px 8px', borderRadius: '4px', backgroundColor: '#e9ecef', fontSize: '13px' }}>{item.category || 'Uncategorized'}</span>
+                                                </td>
+                                                <td style={{ padding: '12px', verticalAlign: 'middle', fontWeight: '600', color: '#28a745' }}>৳{item.price?.toFixed(2) || '0.00'}</td>
+                                                <td style={{ padding: '12px', verticalAlign: 'middle' }}>
+                                                    <span style={{
+                                                        padding: '4px 10px',
+                                                        borderRadius: '20px',
+                                                        fontSize: '12px',
+                                                        fontWeight: '600',
+                                                        textTransform: 'uppercase',
+                                                        backgroundColor: item.status === 'active' ? '#d4edda' : item.status === 'inactive' ? '#f8d7da' : '#fff3cd',
+                                                        color: item.status === 'active' ? '#155724' : item.status === 'inactive' ? '#721c24' : '#856404'
+                                                    }}>{item.status || 'unknown'}</span>
+                                                </td>
+                                                <td style={{ padding: '12px', verticalAlign: 'middle' }}>
+                                                    <div style={{ display: 'flex', gap: '8px', flexWrap: 'wrap' }}>
+                                                        <button onClick={() => navigate(`/cafeteria/admin/edit-item/${item._id || item.id}`)} style={{ padding: '6px 12px', backgroundColor: '#17a2b8', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '5px' }}>✏️ Edit</button>
+                                                        <button onClick={() => handleDeleteFoodItem(item._id || item.id, item.name)} style={{ padding: '6px 12px', backgroundColor: '#dc3545', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '5px' }}>🗑️ Delete</button>
+                                                        <button onClick={() => handleToggleFeatured(item._id || item.id, item.featured)} style={{ padding: '6px 12px', backgroundColor: item.featured ? '#ffc107' : '#6c757d', color: item.featured ? '#212529' : 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '5px' }}>{item.featured ? '⭐ Unfeature' : 'Mark Featured'}</button>
+                                                    </div>
+                                                </td>
+                                            </tr>
+                                        ))}
+                                    </tbody>
+                                </table>
+                            </div>
                         ) : (
-                            <p className="no-items">No food items found.</p>
+                            <div style={{ textAlign: 'center', padding: '40px 0', color: '#6c757d' }}>
+                                <p>No food items found.</p>
+                                <button onClick={() => navigate('/cafeteria/admin/add-item')} style={{ padding: '10px 20px', borderRadius: '5px', backgroundColor: '#007bff', color: 'white', border: 'none', cursor: 'pointer' }}>➕ Add First Item</button>
+                            </div>
                         )}
                     </div>
                 </div>

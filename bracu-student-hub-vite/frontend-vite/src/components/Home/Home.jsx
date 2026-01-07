@@ -36,17 +36,16 @@ function Home() {
         <div className="hero-image">
           <div className="features-illustration">
             <div className="feature-item">
-              <span className="feature-icon">📊</span>
               <h3>GPA Calculator</h3>
               <p>Accurate semester and cumulative GPA calculations</p>
             </div>
             <div className="feature-item">
-              <span className="feature-icon">📈</span>
+
               <h3>Progress Tracking</h3>
               <p>Monitor your academic performance over time</p>
             </div>
             <div className="feature-item">
-              <span className="feature-icon">🎯</span>
+
               <h3>Goal Setting</h3>
               <p>Set and achieve your academic targets</p>
             </div>
@@ -59,25 +58,25 @@ function Home() {
 
         <div className="features-grid">
           <div className="feature-card">
-            <div className="feature-icon">🔐</div>
+
             <h3>Secure & Private</h3>
             <p>Your academic data is encrypted and stored securely.</p>
           </div>
 
           <div className="feature-card">
-            <div className="feature-icon">📱</div>
+
             <h3>Easy to Use</h3>
             <p>Intuitive interface designed for students of all levels.</p>
           </div>
 
           <div className="feature-card">
-            <div className="feature-icon">⚡</div>
+
             <h3>Fast & Reliable</h3>
             <p>Instant calculations with real-time updates.</p>
           </div>
 
           <div className="feature-card">
-            <div className="feature-icon">📊</div>
+
             <h3>Detailed Analytics</h3>
             <p>Comprehensive reports and visualizations of your performance.</p>
           </div>

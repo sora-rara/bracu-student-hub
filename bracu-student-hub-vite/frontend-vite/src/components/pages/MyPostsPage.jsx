@@ -1,8 +1,7 @@
 import React, { useState, useEffect } from 'react';
-import { Link } from 'react-router-dom';
-import { FaBook, FaCar, FaUsers, FaEdit, FaTrash, FaPlus } from 'react-icons/fa';
+import { Link, useNavigate } from 'react-router-dom';
+import { FaBook, FaCar, FaUsers, FaTrash, FaPlus, FaEye, FaUserFriends } from 'react-icons/fa';
 import apiService from '../../services/api';
-import NeedPostCard from '../Groups/NeedPostCard';
 
 function MyPostsPage() {
     const [posts, setPosts] = useState([]);
@@ -10,6 +9,8 @@ function MyPostsPage() {
     const [error, setError] = useState('');
     const [showDeleteConfirm, setShowDeleteConfirm] = useState(null);
     const [deleting, setDeleting] = useState(false);
+    const [filter, setFilter] = useState('all');
+    const navigate = useNavigate();
 
     useEffect(() => {
         fetchMyPosts();
@@ -55,11 +56,15 @@ function MyPostsPage() {
             const response = await apiService.createGroupFromPost(postId, { groupName });
             if (response.success) {
                 alert('Group created successfully!');
-                fetchMyPosts(); // Refresh posts list
+                fetchMyPosts();
             }
         } catch (err) {
             alert(err.response?.data?.message || 'Failed to create group');
         }
+    };
+
+    const handleViewDetails = (postId) => {
+        navigate(`/find-my-group/${postId}`);
     };
 
     const getStats = () => {
@@ -67,11 +72,28 @@ function MyPostsPage() {
         const study = posts.filter(p => p.type === 'study').length;
         const transport = posts.filter(p => p.type === 'transport').length;
         const open = posts.filter(p => p.status === 'open').length;
+        const closed = posts.filter(p => p.status === 'closed').length;
 
-        return { total, study, transport, open };
+        return { total, study, transport, open, closed };
+    };
+
+    const getFilteredPosts = () => {
+        switch (filter) {
+            case 'open':
+                return posts.filter(post => post.status === 'open');
+            case 'closed':
+                return posts.filter(post => post.status === 'closed');
+            case 'study':
+                return posts.filter(post => post.type === 'study');
+            case 'transport':
+                return posts.filter(post => post.type === 'transport');
+            default:
+                return posts;
+        }
     };
 
     const stats = getStats();
+    const filteredPosts = getFilteredPosts();
 
     if (loading) {
         return (
@@ -138,6 +160,42 @@ function MyPostsPage() {
                 </div>
             </div>
 
+            {/* Filter Buttons */}
+            <div className="mb-4">
+                <div className="btn-group" role="group">
+                    <button
+                        className={`btn btn-outline-primary ${filter === 'all' ? 'active' : ''}`}
+                        onClick={() => setFilter('all')}
+                    >
+                        All ({stats.total})
+                    </button>
+                    <button
+                        className={`btn btn-outline-primary ${filter === 'open' ? 'active' : ''}`}
+                        onClick={() => setFilter('open')}
+                    >
+                        Open ({stats.open})
+                    </button>
+                    <button
+                        className={`btn btn-outline-primary ${filter === 'closed' ? 'active' : ''}`}
+                        onClick={() => setFilter('closed')}
+                    >
+                        Closed ({stats.closed})
+                    </button>
+                    <button
+                        className={`btn btn-outline-primary ${filter === 'study' ? 'active' : ''}`}
+                        onClick={() => setFilter('study')}
+                    >
+                        Study ({stats.study})
+                    </button>
+                    <button
+                        className={`btn btn-outline-primary ${filter === 'transport' ? 'active' : ''}`}
+                        onClick={() => setFilter('transport')}
+                    >
+                        Transport ({stats.transport})
+                    </button>
+                </div>
+            </div>
+
             {/* Posts List */}
             <div className="row">
                 <div className="col-12">
@@ -154,101 +212,123 @@ function MyPostsPage() {
                         </div>
                     ) : (
                         <>
-                            <div className="mb-3">
-                                <div className="btn-group" role="group">
-                                    <button className="btn btn-outline-primary active">All ({stats.total})</button>
-                                    <button className="btn btn-outline-primary">Open ({stats.open})</button>
-                                    <button className="btn btn-outline-primary">Study ({stats.study})</button>
-                                    <button className="btn btn-outline-primary">Transport ({stats.transport})</button>
-                                </div>
-                            </div>
-
                             <div className="row row-cols-1 row-cols-md-2 row-cols-lg-3 g-4">
-                                {posts.map(post => (
+                                {filteredPosts.map(post => (
                                     <div key={post._id} className="col">
-                                        <div className="card h-100">
-                                            <div className="card-header">
+                                        <div className="card h-100 shadow-sm">
+                                            <div className="card-header bg-light">
                                                 <div className="d-flex justify-content-between align-items-center">
                                                     <div className="d-flex align-items-center gap-2">
-                                                        {post.type === 'study' ?
-                                                            <FaBook className="text-primary" /> :
-                                                            <FaCar className="text-success" />
-                                                        }
+                                                        {post.type === 'study' ? (
+                                                            <FaBook className="text-primary fs-5" />
+                                                        ) : (
+                                                            <FaCar className="text-success fs-5" />
+                                                        )}
                                                         <span className={`badge ${post.status === 'open' ? 'bg-success' : 'bg-secondary'}`}>
                                                             {post.status}
                                                         </span>
                                                     </div>
-                                                    <div className="dropdown">
-                                                        <button className="btn btn-sm btn-outline-secondary dropdown-toggle" type="button" data-bs-toggle="dropdown">
-                                                            Actions
-                                                        </button>
-                                                        <ul className="dropdown-menu">
-                                                            <li>
-                                                                <Link className="dropdown-item" to={`/find-my-group/${post._id}`}>
-                                                                    <FaEdit className="me-2" /> View Details
-                                                                </Link>
-                                                            </li>
-                                                            {post.status === 'open' && (
-                                                                <li>
-                                                                    <button
-                                                                        className="dropdown-item"
-                                                                        onClick={() => handleCreateGroup(post._id)}
-                                                                    >
-                                                                        <FaUsers className="me-2" /> Create Group
-                                                                    </button>
-                                                                </li>
-                                                            )}
-                                                            <li><hr className="dropdown-divider" /></li>
-                                                            <li>
-                                                                <button
-                                                                    className="dropdown-item text-danger"
-                                                                    onClick={() => setShowDeleteConfirm(post._id)}
-                                                                    disabled={deleting}
-                                                                >
-                                                                    <FaTrash className="me-2" /> Delete
-                                                                </button>
-                                                            </li>
-                                                        </ul>
+                                                    <div className="text-muted small">
+                                                        {new Date(post.createdAt).toLocaleDateString()}
                                                     </div>
                                                 </div>
                                             </div>
-                                            <div className="card-body">
-                                                <h5 className="card-title">{post.title}</h5>
-                                                <p className="card-text text-muted small">{post.description.substring(0, 100)}...</p>
 
+                                            <div className="card-body d-flex flex-column">
+                                                <h5 className="card-title mb-3">{post.title}</h5>
+
+                                                <p className="card-text text-muted mb-3 flex-grow-1">
+                                                    {post.description ?
+                                                        `${post.description.substring(0, 120)}${post.description.length > 120 ? '...' : ''}`
+                                                        : 'No description'
+                                                    }
+                                                </p>
+
+                                                {/* Tags/Badges */}
                                                 <div className="mb-3">
                                                     {post.type === 'study' ? (
                                                         <>
                                                             {post.subject && (
-                                                                <div className="badge bg-info me-2">{post.subject}</div>
+                                                                <span className="badge bg-info me-1 mb-1">{post.subject}</span>
                                                             )}
                                                             {post.courseCode && (
-                                                                <div className="badge bg-primary">{post.courseCode}</div>
+                                                                <span className="badge bg-primary me-1 mb-1">{post.courseCode}</span>
                                                             )}
                                                         </>
                                                     ) : (
                                                         <>
                                                             {post.route && (
-                                                                <div className="badge bg-success me-2">{post.route}</div>
+                                                                <span className="badge bg-success me-1 mb-1">{post.route}</span>
+                                                            )}
+                                                            {post.pickupLocation && (
+                                                                <span className="badge bg-warning me-1 mb-1">{post.pickupLocation}</span>
                                                             )}
                                                         </>
                                                     )}
                                                 </div>
 
-                                                <div className="d-flex justify-content-between align-items-center">
+                                                {/* Stats */}
+                                                <div className="d-flex justify-content-between align-items-center mb-3">
                                                     <small className="text-muted">
                                                         <FaUsers className="me-1" />
                                                         {post.interestedUsers?.length || 0} interested
                                                     </small>
-                                                    <small className="text-muted">
-                                                        Created: {new Date(post.createdAt).toLocaleDateString()}
-                                                    </small>
+                                                    {post.hasGroup && (
+                                                        <span className="badge bg-info">
+                                                            <FaUserFriends className="me-1" /> Has Group
+                                                        </span>
+                                                    )}
+                                                </div>
+
+                                                {/* Action Buttons - NO DROPDOWN */}
+                                                <div className="d-grid gap-2 d-md-flex justify-content-md-between">
+                                                    <button
+                                                        className="btn btn-outline-primary btn-sm"
+                                                        onClick={() => handleViewDetails(post._id)}
+                                                    >
+                                                        <FaEye className="me-1" /> View Details
+                                                    </button>
+
+                                                    <div className="d-flex gap-2">
+                                                        {post.status === 'open' && !post.hasGroup && (
+                                                            <button
+                                                                className="btn btn-outline-success btn-sm"
+                                                                onClick={() => handleCreateGroup(post._id)}
+                                                            >
+                                                                <FaUsers className="me-1" /> Create Group
+                                                            </button>
+                                                        )}
+
+                                                        <button
+                                                            className="btn btn-outline-danger btn-sm"
+                                                            onClick={() => setShowDeleteConfirm(post._id)}
+                                                            disabled={deleting}
+                                                        >
+                                                            <FaTrash className="me-1" /> Delete
+                                                        </button>
+                                                    </div>
                                                 </div>
                                             </div>
                                         </div>
                                     </div>
                                 ))}
                             </div>
+
+                            {filteredPosts.length === 0 && posts.length > 0 && (
+                                <div className="text-center py-5">
+                                    <FaUsers className="display-1 text-muted mb-3" />
+                                    <h4>No Posts Found</h4>
+                                    <p className="text-muted">
+                                        No posts match the current filter. Try a different filter.
+                                    </p>
+                                    <button
+                                        className="btn btn-outline-primary"
+                                        onClick={() => setFilter('all')}
+                                    >
+                                        Show All Posts
+                                    </button>
+                                </div>
+                            )}
                         </>
                     )}
                 </div>
@@ -256,16 +336,51 @@ function MyPostsPage() {
 
             {/* Delete Confirmation Modal */}
             {showDeleteConfirm && (
-                <div className="modal-overlay">
-                    <div className="modal-content">
-                        <div className="modal-header">
+                <div className="modal-overlay" style={{
+                    position: 'fixed',
+                    top: 0,
+                    left: 0,
+                    right: 0,
+                    bottom: 0,
+                    backgroundColor: 'rgba(0,0,0,0.5)',
+                    display: 'flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    zIndex: 9999,
+                    padding: '20px'
+                }}>
+                    <div className="modal-content" style={{
+                        background: 'white',
+                        borderRadius: '8px',
+                        maxWidth: '500px',
+                        width: '100%',
+                        boxShadow: '0 4px 20px rgba(0,0,0,0.15)'
+                    }}>
+                        <div className="modal-header" style={{
+                            padding: '16px 20px',
+                            borderBottom: '1px solid #e9ecef',
+                            display: 'flex',
+                            justifyContent: 'space-between',
+                            alignItems: 'center'
+                        }}>
                             <h5 className="modal-title">Delete Post</h5>
-                            <button type="button" className="btn-close" onClick={() => setShowDeleteConfirm(null)}></button>
+                            <button
+                                type="button"
+                                className="btn-close"
+                                onClick={() => setShowDeleteConfirm(null)}
+                                disabled={deleting}
+                            ></button>
                         </div>
-                        <div className="modal-body">
+                        <div className="modal-body" style={{ padding: '20px' }}>
                             <p>Are you sure you want to delete this post? This action cannot be undone.</p>
                         </div>
-                        <div className="modal-footer">
+                        <div className="modal-footer" style={{
+                            padding: '16px 20px',
+                            borderTop: '1px solid #e9ecef',
+                            display: 'flex',
+                            justifyContent: 'flex-end',
+                            gap: '10px'
+                        }}>
                             <button
                                 type="button"
                                 className="btn btn-secondary"
@@ -280,7 +395,7 @@ function MyPostsPage() {
                                 onClick={() => handleDeletePost(showDeleteConfirm)}
                                 disabled={deleting}
                             >
-                                {deleting ? 'Deleting...' : 'Delete'}
+                                {deleting ? 'Deleting...' : 'Delete Post'}
                             </button>
                         </div>
                     </div>

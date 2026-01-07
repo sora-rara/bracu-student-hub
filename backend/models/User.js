@@ -10,6 +10,11 @@ const userSchema = new mongoose.Schema({
         enum: ["student", "admin", "faculty"],
         default: "student"
     },
+    // In User.js schema, add:
+    semesterPlanId: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'SemesterPlan'
+    },
 
     // Additional admin fields
     adminProfile: {
@@ -50,6 +55,7 @@ const userSchema = new mongoose.Schema({
             type: Date,
             default: Date.now
         }
+
     }
 }, {
     timestamps: true

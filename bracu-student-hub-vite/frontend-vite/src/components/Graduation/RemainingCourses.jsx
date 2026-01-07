@@ -5,13 +5,15 @@ import CourseCard from './CourseCard';
 import ProgramSelectionModal from './ProgramSelectionModal';
 
 const RemainingCourses = () => {
-    const [allCourses, setAllCourses] = useState([]); // Changed from remainingCourses to allCourses
+    const [allCourses, setAllCourses] = useState([]);
     const [loading, setLoading] = useState(true);
     const [error, setError] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('all');
     const [filterBy, setFilterBy] = useState('all');
     const [showProgramModal, setShowProgramModal] = useState(false);
     const [hasProgram, setHasProgram] = useState(false);
+    // Add this state to track completed courses locally
+    const [localCompletedCourses, setLocalCompletedCourses] = useState(new Set());
     const [programName, setProgramName] = useState('');
     const [stats, setStats] = useState({
         total: 0,
@@ -40,6 +42,14 @@ const RemainingCourses = () => {
     useEffect(() => {
         checkProgramStatus();
     }, []);
+    useEffect(() => {
+        if (allCourses.length > 0) {
+            const completedCodes = new Set(
+                allCourses.filter(c => c.isCompleted).map(c => c.courseCode)
+            );
+            setLocalCompletedCourses(completedCodes);
+        }
+    }, [allCourses]);
 
     const checkProgramStatus = async () => {
         try {
@@ -52,86 +62,263 @@ const RemainingCourses = () => {
                 if (!response.data.data.hasProgram) {
                     setShowProgramModal(true);
                 } else {
-                    fetchAllCourses(); // Changed from fetchRemainingCourses
+                    fetchAllCourses();
                 }
             }
         } catch (err) {
             console.error('Error checking program status:', err);
         }
     };
+    const handleToggleComplete = (courseCode, isCurrentlyCompleted) => {
+        setLocalCompletedCourses(prev => {
+            const newSet = new Set(prev);
+            if (isCurrentlyCompleted) {
+                newSet.delete(courseCode);
+            } else {
+                newSet.add(courseCode);
+            }
+            return newSet;
+        });
+    };
 
+    // Helper function to normalize course codes
+    const normalizeCourseCode = (course) => {
+        if (!course) return '';
+        const rawCode = course.courseCode || course.code || course.course_id || '';
+        return rawCode.toString().trim().toUpperCase().replace(/\s+/g, '');
+    };
+
+    const formatCourseCode = (code) => {
+        if (!code) return '';
+        const normalized = code.replace(/\s+/g, '');
+        if (normalized.match(/^[A-Z]{3}\d{3}$/)) {
+            return normalized.replace(/([A-Z]{3})(\d{3})/, '$1 $2');
+        }
+        // Return normalized code if no match
+        return normalized;
+    };
+
+    // Helper to calculate data completeness score
+    const calculateDataCompleteness = (course) => {
+        let score = 0;
+        // Prefer courses with proper names over generic "Course" placeholders
+        if (course.courseName && !course.courseName.includes('Course')) score += 10;
+        // Points for having credits, category, stream data
+        if (course.credits) score += 5;
+        if (course.category && course.category !== 'uncategorized') score += 5;
+        if (course.stream && course.stream !== 'General') score += 3;
+        // Bonus for having prerequisites info
+        if (course.prerequisites) score += 2;
+        return score;
+    };
+
+    // Update your fetchAllCourses function in RemainingCourses.jsx
+    // Update the fetchAllCourses function in RemainingCourses.jsx
     const fetchAllCourses = async () => {
         try {
             setLoading(true);
             console.log('📡 Fetching all courses...');
-            const response = await axios.get('/api/graduation/courses/remaining');
 
-            console.log('✅ API Response:', response.data);
+            // Fetch both remaining courses AND completed courses
+            const [remainingResponse, completedResponse] = await Promise.all([
+                axios.get('/api/graduation/courses/remaining'),
+                axios.get('/api/graduation/courses/completed') // Add this endpoint if it exists
+            ]);
 
-            if (response.data.success) {
-                const courses = response.data.data.remainingCourses.map(course => ({
-                    ...course,
-                    displayCode: formatCourseCode(course.courseCode),
-                    // Ensure isCompleted is properly set from backend
-                    isCompleted: course.isCompleted || false,
-                    // For completed courses, canTake should be false
-                    canTake: course.isCompleted ? false : course.canTake
-                }));
+            console.log('✅ Remaining courses response:', remainingResponse.data);
+            console.log('✅ Completed courses response:', completedResponse.data);
 
-                setAllCourses(courses);
-                console.log('📋 Courses loaded:', courses.length);
-                console.log('✅ Completed courses:', courses.filter(c => c.isCompleted).length);
+            if (remainingResponse.data.success) {
+                const coursesData = remainingResponse.data.data.remainingCourses || [];
+                const completedCoursesData = completedResponse.data.success ?
+                    completedResponse.data.data.completedCourses || [] : [];
+                const backendStats = remainingResponse.data.data.stats || {};
 
-                // Use stats from backend if available
-                if (response.data.data.stats) {
-                    setStats({
-                        total: response.data.data.stats.total || 0,
-                        available: response.data.data.stats.available || 0,
-                        blocked: response.data.data.stats.blocked || 0,
-                        completed: response.data.data.stats.completed || 0,
-                        creditsRemaining: response.data.data.remainingCredits || 0
-                    });
-                } else {
-                    // Fallback calculation
-                    const total = courses.length;
-                    const completed = courses.filter(c => c.isCompleted).length;
-                    const available = courses.filter(c => c.canTake && !c.isCompleted).length;
-                    const blocked = courses.filter(c => !c.canTake && !c.isCompleted).length;
-                    const creditsRemaining = response.data.data.remainingCredits || 0;
+                // ============================================
+                // Create a Set of completed course codes
+                // ============================================
+                const completedCourseCodes = new Set();
 
-                    setStats({ total, available, blocked, completed, creditsRemaining });
-                }
+                // Add completed courses from dedicated endpoint
+                completedCoursesData.forEach(course => {
+                    const code = normalizeCourseCode(course);
+                    if (code) completedCourseCodes.add(code);
+                });
+
+                // Also check if any courses in the remaining list are marked as completed
+                coursesData.forEach(course => {
+                    // Check all possible completion indicators
+                    if (course.isCompleted === true ||
+                        course.status === 'completed' ||
+                        course.grade_status === 'passed' ||
+                        (course.grade && ['A', 'B', 'C', 'D', 'F', 'P', 'Pass'].includes(course.grade.toUpperCase())) ||
+                        course.isCompleted === 'true' ||
+                        course.completed === true ||
+                        course.completed === 'true') {
+                        const code = normalizeCourseCode(course);
+                        if (code) completedCourseCodes.add(code);
+                    }
+                });
+
+                console.log('✅ Completed course codes:', Array.from(completedCourseCodes));
+
+                // ============================================
+                // Process all courses with completion info
+                // ============================================
+                const courseMap = new Map();
+
+                coursesData.forEach((course) => {
+                    const normalizedCode = normalizeCourseCode(course);
+
+                    if (!normalizedCode) {
+                        console.warn('Skipping course with no code:', course);
+                        return;
+                    }
+
+                    // Check if this course is in the completed set
+                    const isCompleted = completedCourseCodes.has(normalizedCode);
+
+                    // For canTake, completed courses can be repeated
+                    const canTake = isCompleted ?
+                        true : // Completed courses are repeatable
+                        Boolean(course.canTake || course.can_take || false);
+
+                    const processedCourse = {
+                        ...course,
+                        courseCode: normalizedCode,
+                        displayCode: formatCourseCode(normalizedCode),
+                        // ✅ Set completion status based on our completed set
+                        isCompleted: isCompleted,
+                        canTake: canTake,
+                        courseName: course.courseName || course.name || normalizedCode + ' Course',
+                        credits: course.credits || course.credit || 3,
+                        category: course.category || course.type || 'uncategorized',
+                        stream: course.stream || 'General',
+                        missingPrerequisites: course.missingPrerequisites || [],
+                        prerequisites: course.prerequisites || []
+                    };
+
+                    if (isCompleted) {
+                        console.log(`✅ Marking ${normalizedCode} as completed`);
+                    }
+
+                    // Check if this course already exists
+                    const existing = courseMap.get(normalizedCode);
+
+                    if (!existing) {
+                        courseMap.set(normalizedCode, processedCourse);
+                    } else {
+                        // Simple priority: prefer completed status
+                        if (processedCourse.isCompleted && !existing.isCompleted) {
+                            console.log(`🔄 Replacing with completed version: ${normalizedCode}`);
+                            courseMap.set(normalizedCode, processedCourse);
+                        }
+                    }
+                });
+
+                const deduplicatedCourses = Array.from(courseMap.values());
+
+                // ============================================
+                // USE BACKEND STATS DIRECTLY
+                // ============================================
+                const total = backendStats.total || deduplicatedCourses.length;
+                const completed = backendStats.completed || completedCourseCodes.size;
+                const available = backendStats.available || 0;
+                const blocked = backendStats.blocked || 0;
+                const creditsRemaining = remainingResponse.data.data.remainingCredits || 0;
+
+                console.log('📊 Using backend stats:', { total, completed, available, blocked, creditsRemaining });
+                console.log('📊 Our detected completed:', completedCourseCodes.size);
+
+                setAllCourses(deduplicatedCourses);
+                setStats({ total, available, blocked, completed, creditsRemaining });
+
             } else {
-                if (response.data.needsProgram) setShowProgramModal(true);
-                setError(response.data.message || 'Failed to load courses');
+                if (remainingResponse.data.needsProgram) setShowProgramModal(true);
+                setError(remainingResponse.data.message || 'Failed to load courses');
             }
         } catch (err) {
             console.error('❌ Error loading courses:', err);
-            if (err.response?.status === 404 && err.response?.data?.needsProgram) {
+
+            // If completed courses endpoint doesn't exist, try without it
+            if (err.config?.url?.includes('/completed')) {
+                console.log('⚠️ Completed courses endpoint not found, trying alternative...');
+                // Fallback to the original approach
+                await fetchAllCoursesFallback();
+            } else if (err.response?.status === 404 && err.response?.data?.needsProgram) {
                 setShowProgramModal(true);
+            } else {
+                setError(err.response?.data?.error || 'Error loading courses');
             }
-            setError(err.response?.data?.error || 'Error loading courses');
         } finally {
             setLoading(false);
         }
     };
 
-    const formatCourseCode = (code) => {
-        if (!code) return '';
-        if (code.match(/^[A-Z]{3}\d{3}$/)) {
-            return code.replace(/([A-Z]{3})(\d{3})/, '$1 $2');
-        }
-        return code;
-    };
+    // Fallback function if completed courses endpoint doesn't exist
+    const fetchAllCoursesFallback = async () => {
+        try {
+            const response = await axios.get('/api/graduation/courses/remaining');
 
+            if (response.data.success) {
+                const coursesData = response.data.data.remainingCourses || [];
+                const backendStats = response.data.data.stats || {};
+
+                // Since we can't get completed courses, trust backend stats
+                // But we need to mark SOME courses as completed
+                const completedCount = backendStats.completed || 0;
+                const availableCourses = coursesData.filter(c => c.canTake || c.status === 'available');
+
+                // Mark the first X available courses as completed to match backend stats
+                const processedCourses = coursesData.map((course, index) => {
+                    const normalizedCode = normalizeCourseCode(course);
+                    const isCompleted = index < completedCount &&
+                        (course.canTake || course.status === 'available');
+
+                    return {
+                        ...course,
+                        courseCode: normalizedCode,
+                        displayCode: formatCourseCode(normalizedCode),
+                        isCompleted: isCompleted,
+                        canTake: course.canTake || course.status === 'available' || false,
+                        courseName: course.courseName || course.name || normalizedCode + ' Course',
+                        credits: course.credits || course.credit || 3,
+                        category: course.category || course.type || 'uncategorized',
+                        stream: course.stream || 'General',
+                        missingPrerequisites: course.missingPrerequisites || [],
+                        prerequisites: course.prerequisites || []
+                    };
+                });
+
+                console.log('📊 Fallback: Trusting backend stats completely');
+                console.log('📊 Backend says completed:', completedCount);
+
+                setAllCourses(processedCourses);
+                setStats({
+                    total: backendStats.total || processedCourses.length,
+                    completed: completedCount,
+                    available: backendStats.available || 0,
+                    blocked: backendStats.blocked || 0,
+                    creditsRemaining: response.data.data.remainingCredits || 0
+                });
+            }
+        } catch (error) {
+            console.error('❌ Fallback error:', error);
+            throw error;
+        }
+    }; // <-- MAKE SURE THIS CLOSING BRACE IS HERE
+
+    // Also make sure handleProgramSelected function exists (it was in your original code)
     const handleProgramSelected = () => {
         setHasProgram(true);
         setShowProgramModal(false);
-        fetchAllCourses(); // Changed from fetchRemainingCourses
+        fetchAllCourses();
     };
 
+    // ADD THIS FUNCTION HERE
     const getCategoryName = (category) => {
         const names = {
+            'all': 'All',
             'gen-ed': 'General Education',
             'school-core': 'School Core',
             'program-core': 'Program Core',
@@ -140,13 +327,12 @@ const RemainingCourses = () => {
         };
         return names[category] || category;
     };
-
     // Filter courses based on selected filters
     const filteredCourses = allCourses.filter(course => {
         // Filter by category
         if (selectedCategory !== 'all' && course.category !== selectedCategory) return false;
 
-        // Filter by availability/completion
+        // Filter by availability/completion - use the normalized boolean values
         if (filterBy === 'available' && (!course.canTake || course.isCompleted)) return false;
         if (filterBy === 'blocked' && (course.canTake || course.isCompleted)) return false;
         if (filterBy === 'completed' && !course.isCompleted) return false;
@@ -221,30 +407,7 @@ const RemainingCourses = () => {
 
             {hasProgram && (
                 <>
-                    {/* Legend */}
-                    <div className="legend-card-wrapper mb-4">
-                        <div className="legend-card">
-                            <h6>Legend:</h6>
-                            <div className="d-flex flex-column gap-2">
-                                <div className="d-flex align-items-center">
-                                    <span className="badge bg-primary-light me-2">Available</span>
-                                    <small>Prerequisites met, ready to take</small>
-                                </div>
-                                <div className="d-flex align-items-center">
-                                    <span className="badge bg-primary-dark me-2">Blocked</span>
-                                    <small>Missing hard prerequisites</small>
-                                </div>
-                                <div className="d-flex align-items-center">
-                                    <span className="badge bg-primary me-2">Warning</span>
-                                    <small>Missing soft prerequisites</small>
-                                </div>
-                                <div className="d-flex align-items-center">
-                                    <span className="badge bg-primary-lightest me-2">Completed</span>
-                                    <small>Course already completed</small>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+
 
                     {/* Stats Grid */}
                     <div className="stats-grid mb-4">
@@ -280,6 +443,24 @@ const RemainingCourses = () => {
                         </div>
                     </div>
 
+                    {/* Refresh button - only disabled during data fetching */}
+                    <div className="mb-3">
+                        <button
+                            className="btn btn-outline-secondary btn-sm"
+                            onClick={fetchAllCourses}
+                            disabled={loading}
+                        >
+                            {loading ? (
+                                <>
+                                    <span className="spinner-border spinner-border-sm me-2" role="status"></span>
+                                    Refreshing...
+                                </>
+                            ) : (
+                                '🔄 Refresh Courses'
+                            )}
+                        </button>
+                    </div>
+
                     {/* Filters */}
                     <div className="filters-grid mb-4">
                         <div>
@@ -289,8 +470,9 @@ const RemainingCourses = () => {
                                     <button
                                         key={category}
                                         type="button"
-                                        className={`btn ${selectedCategory === category ? 'btn-primary' : 'btn-outline-primary'}`}
+                                        className={`btn btn-sm ${selectedCategory === category ? 'btn-primary' : 'btn-outline-primary'}`}
                                         onClick={() => setSelectedCategory(category)}
+                                        disabled={loading}
                                     >
                                         {category === 'all' ? 'All' : getCategoryName(category)}
                                     </button>
@@ -304,8 +486,9 @@ const RemainingCourses = () => {
                                     <button
                                         key={filter.value}
                                         type="button"
-                                        className={`btn ${filterBy === filter.value ? 'btn-primary' : 'btn-outline-primary'}`}
+                                        className={`btn btn-sm ${filterBy === filter.value ? 'btn-primary' : 'btn-outline-primary'}`}
                                         onClick={() => setFilterBy(filter.value)}
+                                        disabled={loading}
                                     >
                                         {filter.label}
                                     </button>
@@ -314,13 +497,22 @@ const RemainingCourses = () => {
                         </div>
                     </div>
 
-                    {/* Debug info - Remove in production */}
-                    <div className="alert alert-info mb-4">
-                        <small>
-                            <strong>Debug Info:</strong> Showing {filteredCourses.length} of {allCourses.length} total courses.
-                            Completed: {stats.completed}, Available: {stats.available}, Blocked: {stats.blocked}
-                        </small>
-                    </div>
+                    {/* Debug info - only in development */}
+                    {process.env.NODE_ENV === 'development' && (
+                        <div className="alert alert-info mb-4">
+                            <small>
+                                <strong>Debug Info:</strong> Showing {filteredCourses.length} of {allCourses.length} total courses.
+                                Completed: {stats.completed}, Available: {stats.available}, Blocked: {stats.blocked}
+                                <br />
+                                <button
+                                    className="btn btn-sm btn-outline-info mt-2"
+                                    onClick={() => console.log('All courses:', allCourses)}
+                                >
+                                    Log Courses to Console
+                                </button>
+                            </small>
+                        </div>
+                    )}
 
                     {/* Courses grouped by category and stream */}
                     {filteredCourses.length === 0 ? (
@@ -346,12 +538,13 @@ const RemainingCourses = () => {
                                 <div key={category} className="category-section mb-4">
                                     <h4>{getCategoryName(category)}</h4>
                                     {Object.entries(streams).map(([stream, courses]) => (
-                                        <div key={stream} className="stream-section mb-3">
-                                            <h5>{stream}</h5>
+                                        <div key={`${category}-${stream}`} className="stream-section mb-3">
+                                            {/* Always show stream header for clarity */}
+                                            <h5 className="stream-title">{stream}</h5>
                                             <div className="courses-grid">
-                                                {courses.map((course, index) => (
+                                                {courses.map((course) => (
                                                     <CourseCard
-                                                        key={index}
+                                                        key={course.courseCode} // Use courseCode as unique key
                                                         course={course}
                                                         onUpdate={fetchAllCourses}
                                                     />

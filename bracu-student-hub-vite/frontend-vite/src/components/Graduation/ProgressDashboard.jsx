@@ -87,9 +87,7 @@ const ProgressDashboard = () => {
             <div className="dashboard-header">
                 <h2>Graduation Progress</h2>
                 <div className="header-actions">
-                    <Link to="/graduation/timeline" className="btn btn-outline-primary">
-                        View Timeline
-                    </Link>
+
                     <Link to="/graduation/remaining" className="btn btn-outline-secondary">
                         Remaining Courses
                     </Link>

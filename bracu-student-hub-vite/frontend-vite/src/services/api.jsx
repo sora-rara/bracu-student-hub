@@ -344,6 +344,82 @@ const apiService = {
         }
     },
 
+
+    updateGroup: async (groupId, groupData) => {
+        try {
+            const response = await axiosInstance.put(`/api/groups/${groupId}`, groupData);
+            return response.data;
+        } catch (error) {
+            console.error('❌ Update group error:', error);
+            throw error;
+        }
+    },
+
+    deleteGroup: async (groupId) => {
+        try {
+            const response = await axiosInstance.delete(`/api/groups/${groupId}`);
+            return response.data;
+        } catch (error) {
+            console.error('❌ Delete group error:', error);
+            throw error;
+        }
+    },
+
+    // Get group messages - FIXED: Using axiosInstance instead of undefined 'api'
+    getGroupMessages: async (groupId, params = {}) => {
+        try {
+            const response = await axiosInstance.get(`/api/groups/${groupId}/messages`, { params });
+            return response.data;
+        } catch (error) {
+            console.error('❌ Get group messages error:', error);
+            throw error;
+        }
+    },
+
+    // Post a message - FIXED: Using axiosInstance instead of undefined 'api'
+    postGroupMessage: async (groupId, messageData) => {
+        try {
+            const response = await axiosInstance.post(`/api/groups/${groupId}/messages`, messageData);
+            return response.data;
+        } catch (error) {
+            console.error('❌ Post group message error:', error);
+            throw error;
+        }
+    },
+
+    // Edit a message - FIXED: Using axiosInstance instead of undefined 'api'
+    editGroupMessage: async (groupId, messageId, content) => {
+        try {
+            const response = await axiosInstance.put(`/api/groups/${groupId}/messages/${messageId}`, content);
+            return response.data;
+        } catch (error) {
+            console.error('❌ Edit group message error:', error);
+            throw error;
+        }
+    },
+
+    // Delete a message - FIXED: Using axiosInstance instead of undefined 'api'
+    deleteGroupMessage: async (groupId, messageId) => {
+        try {
+            const response = await axiosInstance.delete(`/api/groups/${groupId}/messages/${messageId}`);
+            return response.data;
+        } catch (error) {
+            console.error('❌ Delete group message error:', error);
+            throw error;
+        }
+    },
+
+    // Like/unlike a message - FIXED: Using axiosInstance instead of undefined 'api'
+    toggleMessageLike: async (groupId, messageId) => {
+        try {
+            const response = await axiosInstance.post(`/api/groups/${groupId}/messages/${messageId}/like`);
+            return response.data;
+        } catch (error) {
+            console.error('❌ Toggle message like error:', error);
+            throw error;
+        }
+    },
+
     handleJoinRequest: async (groupId, requestId, action) => {
         try {
             const response = await axiosInstance.put(`/api/groups/${groupId}/requests/${requestId}`, { status: action });
@@ -390,10 +466,13 @@ const apiService = {
         }
     },
 
-    // Admin Group Management API
+    // Add these methods to your apiService object in api.jsx:
+
+    // Admin Group Management API - FIXED PATHS
     adminGetAllNeedPosts: async (params = {}) => {
         try {
-            const response = await axiosInstance.get('/api/admin/need-posts', { params });
+            // Correct path based on your adminGroupRoutes.js
+            const response = await axiosInstance.get('/api/admin/groups/need-posts', { params });
             return response.data;
         } catch (error) {
             console.error('❌ Admin get need posts error:', error);
@@ -401,9 +480,10 @@ const apiService = {
         }
     },
 
-    adminUpdatePostStatus: async (postId, status) => {
+    adminUpdatePostStatus: async (postId, statusData) => {
         try {
-            const response = await axiosInstance.put(`/api/admin/need-posts/${postId}/status`, { status });
+            // Correct path based on your adminGroupRoutes.js
+            const response = await axiosInstance.put(`/api/admin/groups/need-posts/${postId}/status`, statusData);
             return response.data;
         } catch (error) {
             console.error('❌ Admin update post status error:', error);
@@ -411,8 +491,21 @@ const apiService = {
         }
     },
 
+    // NEW: Admin delete post
+    adminDeletePost: async (postId) => {
+        try {
+            // Need to add this route to adminGroupRoutes.js
+            const response = await axiosInstance.delete(`/api/admin/groups/need-posts/${postId}`);
+            return response.data;
+        } catch (error) {
+            console.error('❌ Admin delete post error:', error);
+            throw error;
+        }
+    },
+
     adminGetAllGroups: async (params = {}) => {
         try {
+            // Correct path
             const response = await axiosInstance.get('/api/admin/groups', { params });
             return response.data;
         } catch (error) {
@@ -421,9 +514,9 @@ const apiService = {
         }
     },
 
-    adminUpdateGroupStatus: async (groupId, status) => {
+    adminUpdateGroupStatus: async (groupId, statusData) => {
         try {
-            const response = await axiosInstance.put(`/api/admin/groups/${groupId}/status`, { status });
+            const response = await axiosInstance.put(`/api/admin/groups/${groupId}/status`, statusData);
             return response.data;
         } catch (error) {
             console.error('❌ Admin update group status error:', error);
@@ -431,9 +524,10 @@ const apiService = {
         }
     },
 
+    // FIXED: Correct analytics endpoint
     getGroupAnalytics: async () => {
         try {
-            const response = await axiosInstance.get('/api/admin/analytics');
+            const response = await axiosInstance.get('/api/admin/groups/analytics');
             return response.data;
         } catch (error) {
             console.error('❌ Get group analytics error:', error);
@@ -521,6 +615,106 @@ const apiService = {
             return response.data;
         } catch (error) {
             console.error('❌ Approve and add user error:', error);
+            throw error;
+        }
+    },
+
+    // ==================== BUDGET API (Added from Code 2) ====================
+    // Get all transactions
+    getTransactions: async () => {
+        try {
+            const response = await axiosInstance.get('/api/budget/transactions');
+            return response.data;
+        } catch (error) {
+            console.error('❌ Get transactions error:', error);
+            throw error;
+        }
+    },
+
+    // Add a transaction
+    addTransaction: async (transactionData) => {
+        try {
+            const response = await axiosInstance.post('/api/budget/transactions', transactionData);
+            return response.data;
+        } catch (error) {
+            console.error('❌ Add transaction error:', error);
+            throw error;
+        }
+    },
+
+    // Update a transaction
+    updateTransaction: async (id, transactionData) => {
+        try {
+            const response = await axiosInstance.put(`/api/budget/transactions/${id}`, transactionData);
+            return response.data;
+        } catch (error) {
+            console.error('❌ Update transaction error:', error);
+            throw error;
+        }
+    },
+
+    // Delete a transaction
+    deleteTransaction: async (id) => {
+        try {
+            const response = await axiosInstance.delete(`/api/budget/transactions/${id}`);
+            return response.data;
+        } catch (error) {
+            console.error('❌ Delete transaction error:', error);
+            throw error;
+        }
+    },
+
+    // Get budget summary
+    getBudget: async () => {
+        try {
+            const response = await axiosInstance.get('/api/budget/summary');
+            return response.data;
+        } catch (error) {
+            console.error('❌ Get budget error:', error);
+            throw error;
+        }
+    },
+
+    // Set/update budget
+    setBudget: async (budgetData) => {
+        try {
+            const response = await axiosInstance.post('/api/budget/summary', budgetData);
+            return response.data;
+        } catch (error) {
+            console.error('❌ Set budget error:', error);
+            throw error;
+        }
+    },
+
+    // Get budget stats or analytics
+    getBudgetStats: async () => {
+        try {
+            const response = await axiosInstance.get('/api/budget/insights');
+            return response.data;
+        } catch (error) {
+            console.error('❌ Get budget stats error:', error);
+            throw error;
+        }
+    },
+
+    // Get monthly breakdown
+    getMonthlyBreakdown: async () => {
+        try {
+            const response = await axiosInstance.get('/api/budget/monthly-breakdown');
+            return response.data;
+        } catch (error) {
+            console.error('❌ Get monthly breakdown error:', error);
+            throw error;
+        }
+    },
+
+    // Get category breakdown
+    getCategoryBreakdown: async () => {
+        try {
+            const response = await axiosInstance.get('/api/budget/category-breakdown');
+            return response.data;
+        } catch (error) {
+            console.error('❌ Get category breakdown error:', error);
             throw error;
         }
     },

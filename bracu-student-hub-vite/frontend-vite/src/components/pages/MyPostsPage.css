@@ -1,0 +1,44 @@
+/* MyPostsPage.css */
+.my-posts-page {
+    position: relative;
+}
+
+/* Fix Bootstrap dropdown positioning */
+.my-posts-page .dropdown {
+    position: static !important;
+}
+
+.my-posts-page .dropdown-menu {
+    position: absolute !important;
+    z-index: 1060 !important;
+    top: 100% !important;
+    left: auto !important;
+    right: 0 !important;
+    transform: none !important;
+}
+
+/* Ensure parent containers don't interfere */
+.my-posts-page .card {
+    position: relative;
+    overflow: visible !important;
+}
+
+.my-posts-page .col {
+    position: relative;
+}
+
+/* Mobile responsive dropdown */
+@media (max-width: 768px) {
+    .my-posts-page .dropdown-menu {
+        position: fixed !important;
+        left: 50% !important;
+        right: auto !important;
+        transform: translateX(-50%) !important;
+        min-width: 200px;
+    }
+}
+
+/* Prevent body overflow issues */
+body {
+    overflow-x: hidden;
+}

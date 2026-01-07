@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-import { FaBook, FaCar, FaUsers, FaCalendar, FaMapMarker, FaRoad } from 'react-icons/fa';
+import { FaBook, FaCar, FaUsers, FaCalendar, FaMapMarker, FaRoad, FaLock } from 'react-icons/fa';
 import apiService from '../../services/api';
 import authService from '../../services/auth';
 
@@ -32,9 +32,11 @@ function CreateNeedPost() {
 
     // CreateNeedPost.jsx - ADD this check at the beginning
     useEffect(() => {
-        if (user?.role === 'admin') {
-            navigate('/find-my-group');
-            alert('Admins cannot create posts');
+        if (user?.role === 'admin' || user?.isAdmin) {
+            setError('Administrators cannot create need posts. Please use moderation features instead.');
+            setTimeout(() => {
+                navigate('/find-my-group');
+            }, 3000);
         }
     }, [user, navigate]);
 
@@ -43,11 +45,20 @@ function CreateNeedPost() {
         setFormData(prev => ({ ...prev, [name]: value }));
     };
 
+    // In CreateNeedPost.jsx, update the handleSubmit function:
     const handleSubmit = async (e) => {
         e.preventDefault();
         setLoading(true);
         setError('');
         setSuccess('');
+
+        // Check if user is admin
+        if (user?.role === 'admin' || user?.isAdmin) {
+            setError('Administrators cannot create need posts.');
+            setLoading(false);
+            return;
+        }
+
 
         // Validate form
         if (!formData.title.trim() || !formData.description.trim()) {
@@ -57,7 +68,14 @@ function CreateNeedPost() {
         }
 
         try {
-            const response = await apiService.createNeedPost(formData);
+            // ✅ Prepare data with proper types
+            const postData = {
+                ...formData,
+                maxMembers: parseInt(formData.maxMembers) || 1 // ✅ Convert to number
+            };
+
+            console.log('📤 Sending post data:', postData);
+            const response = await apiService.createNeedPost(postData);
 
             if (response.success) {
                 setSuccess('Post created successfully!');
@@ -66,11 +84,34 @@ function CreateNeedPost() {
                 }, 1500);
             }
         } catch (err) {
+            console.error('❌ Create post error:', err);
             setError(err.response?.data?.message || 'Failed to create post. Please try again.');
+
+            // Show validation errors if available
+            if (err.response?.data?.details) {
+                const errorDetails = Object.values(err.response.data.details).map(e => e.message).join(', ');
+                setError(`Validation errors: ${errorDetails}`);
+            }
         } finally {
             setLoading(false);
         }
     };
+
+
+    // If user is admin, show message instead of form
+    if (user?.role === 'admin' || user?.isAdmin) {
+        return (
+            <div className="container mt-4">
+                <div className="alert alert-danger">
+                    <h5>Administrator Access Restricted</h5>
+                    <p>Administrators cannot create need posts. Please use the moderation panel to manage existing posts.</p>
+                    <button className="btn btn-secondary" onClick={() => navigate('/find-my-group')}>
+                        Back to Posts
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="container mt-4">
@@ -204,6 +245,57 @@ function CreateNeedPost() {
                                     </div>
                                 )}
 
+                                {/*In CreateNeedPost.jsx, in the form section after type-specific fields*/}
+                                {formData.type === 'study' && (
+                                    <div className="row mb-3">
+                                        <div className="col-md-6">
+                                            <label className="form-label">
+                                                <FaLock className="me-2" /> Privacy Setting *
+                                            </label>
+                                            <select
+                                                name="privacy"
+                                                value={formData.privacy || 'public'}
+                                                onChange={handleChange}
+                                                className="form-control"
+                                                required={formData.type === 'study'}
+                                            >
+                                                <option value="public">Public - Anyone can join</option>
+                                                <option value="private">Private - Request to join</option>
+                                            </select>
+                                            <small className="text-muted">
+                                                {formData.privacy === 'private'
+                                                    ? 'Users must request to join (you approve them)'
+                                                    : 'Anyone can join directly'}
+                                            </small>
+                                        </div>
+                                    </div>
+                                )}
+
+
+                                {/*In CreateNeedPost.jsx - Add privacy field for study groups */}
+                                {formData.type === 'study' && (
+                                    <div className="row mb-3">
+                                        <div className="col-md-6">
+                                            <label className="form-label">
+                                                <FaLock className="me-2" /> Privacy Setting
+                                            </label>
+                                            <select
+                                                name="privacy"
+                                                value={formData.privacy || 'public'}
+                                                onChange={handleChange}
+                                                className="form-control"
+                                            >
+                                                <option value="public">Public - Anyone can join</option>
+                                                <option value="private">Private - Request to join</option>
+                                            </select>
+                                            <small className="text-muted">
+                                                {formData.privacy === 'private'
+                                                    ? 'Users must request to join (you approve them)'
+                                                    : 'Anyone can join directly'}
+                                            </small>
+                                        </div>
+                                    </div>
+                                )}
                                 {/* Common Fields */}
                                 <div className="row mb-3">
                                     <div className="col-md-6">

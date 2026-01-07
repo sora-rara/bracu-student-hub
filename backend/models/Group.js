@@ -1,6 +1,49 @@
 // models/Group.js
 const mongoose = require('mongoose');
 
+const groupMessageSchema = new mongoose.Schema({
+    group: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'Group',
+        required: true
+    },
+    user: {
+        type: mongoose.Schema.Types.ObjectId,
+        ref: 'User',
+        required: true
+    },
+    userName: {
+        type: String,
+        required: true
+    },
+    content: {
+        type: String,
+        required: true,
+        trim: true,
+        maxlength: 1000
+    },
+    attachments: [{
+        filename: String,
+        url: String,
+        fileType: String
+    }],
+    isEdited: {
+        type: Boolean,
+        default: false
+    },
+    editedAt: Date,
+    likes: [{
+        user: {
+            type: mongoose.Schema.Types.ObjectId,
+            ref: 'User'
+        },
+        createdAt: {
+            type: Date,
+            default: Date.now
+        }
+    }]
+}, { timestamps: true });
+
 const groupSchema = new mongoose.Schema({
     name: {
         type: String,
@@ -68,6 +111,11 @@ const groupSchema = new mongoose.Schema({
         },
         name: String,
         email: String,
+        role: {
+            type: String,
+            enum: ['member', 'moderator'],
+            default: 'member'
+        },
         joinedAt: {
             type: Date,
             default: Date.now
@@ -101,6 +149,9 @@ const groupSchema = new mongoose.Schema({
     lastActivity: {
         type: Date,
         default: Date.now
+    },
+    lastMessageAt: {
+        type: Date
     },
     isActive: {
         type: Boolean,
@@ -139,6 +190,12 @@ groupSchema.methods.hasPendingRequest = function (userId) {
     );
 };
 
+// Check if user is moderator
+groupSchema.methods.isModerator = function (userId) {
+    const member = this.members.find(m => m.user.toString() === userId.toString());
+    return member && member.role === 'moderator';
+};
+
 // Update timestamp
 groupSchema.pre('save', function () {
     this.updatedAt = new Date();
@@ -148,6 +205,11 @@ groupSchema.pre('save', function () {
         this.status = 'full';
     } else if (this.status === 'full' && this.members.length < this.maxMembers) {
         this.status = 'active';
+    }
+
+    // Set privacy based on type - transport groups are always private
+    if (this.type === 'transport') {
+        this.privacy = 'private';
     }
 
     // Check inactivity (30 days)
@@ -162,6 +224,9 @@ groupSchema.index({ type: 1, status: 1, createdAt: -1 });
 groupSchema.index({ creator: 1 });
 groupSchema.index({ 'members.user': 1 });
 groupSchema.index({ status: 1, lastActivity: 1 });
+groupSchema.index({ privacy: 1, type: 1 });
 
 const Group = mongoose.model('Group', groupSchema);
-module.exports = Group;
+const GroupMessage = mongoose.model('GroupMessage', groupMessageSchema);
+
+module.exports = { Group, GroupMessage };

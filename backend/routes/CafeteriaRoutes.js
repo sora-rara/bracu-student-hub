@@ -22,6 +22,8 @@ router.get('/health', (req, res) => {
         'GET /featured': "Featured items",
         'GET /menu/weekly-calendar': "Weekly calendar",
         'POST /review': "Submit review",
+        'GET /reviews/:foodItemId': "Get reviews for food item", // ADDED
+        'GET /reviews/user/:foodItemId': "Get user's review for food item", // ADDED
         'GET /stats': "Statistics",
         'GET /food-items/active': "Active food items",
         'GET /reviews/all': "All reviews"
@@ -113,7 +115,7 @@ router.get('/food-items/active', async (req, res) => {
     const foodItems = await FoodItem.find({
       status: 'active'
     })
-      .select('name price category mealTime image dietaryTags averageRating')
+      .select('name price category mealTime image dietaryTags averageRating totalReviews description shortDescription featured')
       .sort({ name: 1 });
 
     res.json({
@@ -129,17 +131,22 @@ router.get('/food-items/active', async (req, res) => {
   }
 });
 
-// Submit review
-router.post('/review', async (req, res) => {
+// ====================
+// REVIEW ROUTES - ADDED
+// ====================
+
+// Submit review (already exists, but keeping it)
+router.post('/reviews', async (req, res) => {
   try {
-    const { foodItemId, rating, comment, studentName, anonymous } = req.body;
+    const { foodItemId, rating, comment, studentName, anonymous, userEmail } = req.body;
 
     console.log('📝 Review submission received:', {
       foodItemId,
       rating,
       comment,
       studentName,
-      anonymous
+      anonymous,
+      userEmail
     });
 
     // Validate required fields
@@ -166,11 +173,26 @@ router.post('/review', async (req, res) => {
       });
     }
 
+    // Check if user already reviewed this item
+    if (userEmail) {
+      const existingReview = await Review.findOne({
+        foodItem: foodItemId,
+        userEmail: userEmail.toLowerCase()
+      });
+      
+      if (existingReview) {
+        return res.status(400).json({
+          success: false,
+          message: 'You have already reviewed this item. Please edit your existing review.'
+        });
+      }
+    }
+
     // Create review with consistent field names
     const review = new Review({
-      foodItem: foodItemId,  // This matches the Review model
+      foodItem: foodItemId,
       studentName: anonymous ? 'Anonymous' : (studentName || 'Anonymous'),
-      userEmail: '',  // Optional, can be added later
+      userEmail: userEmail ? userEmail.toLowerCase() : '',
       anonymous: anonymous || false,
       rating: parseInt(rating),
       comment: comment.trim(),
@@ -179,6 +201,9 @@ router.post('/review', async (req, res) => {
 
     const savedReview = await review.save();
     console.log('✅ Review saved successfully:', savedReview._id);
+
+    // Update food item rating stats
+    await updateFoodItemRatingStats(foodItemId);
 
     // Populate for response
     await savedReview.populate('foodItem', 'name price image');
@@ -201,19 +226,134 @@ router.post('/review', async (req, res) => {
   }
 });
 
-// Get all reviews
+// Get reviews for specific food item - NEW ROUTE
+router.get('/reviews/:foodItemId', async (req, res) => {
+  try {
+    const { foodItemId } = req.params;
+
+    const reviews = await Review.find({
+      foodItem: foodItemId,
+      status: { $in: ['approved', 'active'] }
+    })
+      .sort({ createdAt: -1 })
+      .limit(50);
+
+    res.json({
+      success: true,
+      data: { reviews }
+    });
+  } catch (error) {
+    console.error('Error fetching reviews:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching reviews',
+      error: error.message
+    });
+  }
+});
+
+// Get user's review for a specific food item - NEW ROUTE
+router.get('/reviews/user/:foodItemId', async (req, res) => {
+  try {
+    const { foodItemId } = req.params;
+    const { userEmail } = req.query;
+
+    if (!userEmail) {
+      return res.status(400).json({
+        success: false,
+        message: 'User email is required as query parameter'
+      });
+    }
+
+    const review = await Review.findOne({
+      foodItem: foodItemId,
+      userEmail: userEmail.toLowerCase(),
+      status: { $in: ['approved', 'active'] }
+    });
+
+    res.json({
+      success: true,
+      data: review || null
+    });
+  } catch (error) {
+    console.error('Error fetching user review:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error fetching user review',
+      error: error.message
+    });
+  }
+});
+
+// Update a review - NEW ROUTE
+router.put('/reviews/:reviewId', async (req, res) => {
+  try {
+    const { reviewId } = req.params;
+    const { rating, comment, studentName, anonymous, userEmail } = req.body;
+
+    if (!rating || !comment) {
+      return res.status(400).json({
+        success: false,
+        message: 'Rating and comment are required'
+      });
+    }
+
+    const review = await Review.findById(reviewId);
+    if (!review) {
+      return res.status(404).json({
+        success: false,
+        message: 'Review not found'
+      });
+    }
+
+    // Verify user owns this review
+    if (userEmail && review.userEmail !== userEmail.toLowerCase()) {
+      return res.status(403).json({
+        success: false,
+        message: 'You can only edit your own reviews'
+      });
+    }
+
+    // Update review
+    review.rating = parseInt(rating);
+    review.comment = comment.trim();
+    review.studentName = anonymous ? 'Anonymous' : (studentName || 'Anonymous');
+    review.anonymous = anonymous || false;
+    review.updatedAt = Date.now();
+
+    await review.save();
+
+    // Update food item rating stats
+    await updateFoodItemRatingStats(review.foodItem);
+
+    res.json({
+      success: true,
+      message: 'Review updated successfully',
+      data: { review }
+    });
+  } catch (error) {
+    console.error('Error updating review:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error updating review',
+      error: error.message
+    });
+  }
+});
+
+// Get all reviews (public)
 router.get('/reviews/all', async (req, res) => {
   try {
     const { limit = 50, page = 1 } = req.query;
     const skip = (parseInt(page) - 1) * parseInt(limit);
 
     const [reviews, total] = await Promise.all([
-      Review.find({ status: 'approved' })
+      Review.find({ status: { $in: ['approved', 'active'] } })
         .populate('foodItem', 'name price image category')
         .sort({ createdAt: -1 })
         .skip(skip)
         .limit(parseInt(limit)),
-      Review.countDocuments({ status: 'approved' })
+      Review.countDocuments({ status: { $in: ['approved', 'active'] } })
     ]);
 
     res.json({
@@ -236,14 +376,14 @@ router.get('/reviews/all', async (req, res) => {
   }
 });
 
-// Get reviews for specific food item
+// Get reviews for specific food item (alternative route)
 router.get('/food/:id/reviews', async (req, res) => {
   try {
     const { id } = req.params;
 
     const reviews = await Review.find({
       foodItem: id,
-      status: 'approved'
+      status: { $in: ['approved', 'active'] }
     })
       .sort({ createdAt: -1 })
       .limit(20);
@@ -261,6 +401,120 @@ router.get('/food/:id/reviews', async (req, res) => {
   }
 });
 
+// Submit review (legacy route - keep for backward compatibility)
+router.post('/review', async (req, res) => {
+  try {
+    const { foodItemId, rating, comment, studentName, anonymous, userEmail } = req.body;
+
+    console.log('📝 Legacy review submission received:', {
+      foodItemId,
+      rating,
+      comment,
+      studentName,
+      anonymous,
+      userEmail
+    });
+
+    // Validate required fields
+    if (!foodItemId || !rating || !comment) {
+      return res.status(400).json({
+        success: false,
+        message: 'Food item ID, rating, and comment are required'
+      });
+    }
+
+    if (rating < 1 || rating > 5) {
+      return res.status(400).json({
+        success: false,
+        message: 'Rating must be between 1 and 5'
+      });
+    }
+
+    // Check if food item exists
+    const foodItem = await FoodItem.findById(foodItemId);
+    if (!foodItem) {
+      return res.status(404).json({
+        success: false,
+        message: 'Food item not found'
+      });
+    }
+
+    // Check if user already reviewed this item
+    if (userEmail) {
+      const existingReview = await Review.findOne({
+        foodItem: foodItemId,
+        userEmail: userEmail.toLowerCase()
+      });
+      
+      if (existingReview) {
+        return res.status(400).json({
+          success: false,
+          message: 'You have already reviewed this item. Please edit your existing review.'
+        });
+      }
+    }
+
+    // Create review
+    const review = new Review({
+      foodItem: foodItemId,
+      studentName: anonymous ? 'Anonymous' : (studentName || 'Anonymous'),
+      userEmail: userEmail ? userEmail.toLowerCase() : '',
+      anonymous: anonymous || false,
+      rating: parseInt(rating),
+      comment: comment.trim(),
+      status: 'approved'
+    });
+
+    const savedReview = await review.save();
+    console.log('✅ Legacy review saved successfully:', savedReview._id);
+
+    // Update food item rating stats
+    await updateFoodItemRatingStats(foodItemId);
+
+    // Populate for response
+    await savedReview.populate('foodItem', 'name price image');
+
+    res.status(201).json({
+      success: true,
+      message: 'Review submitted successfully!',
+      data: {
+        review: savedReview,
+        foodItemName: savedReview.foodItem.name
+      }
+    });
+  } catch (error) {
+    console.error('❌ Error submitting legacy review:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error submitting review',
+      error: error.message
+    });
+  }
+});
+
+// Helper function to update food item rating stats
+async function updateFoodItemRatingStats(foodItemId) {
+  try {
+    const reviews = await Review.find({
+      foodItem: foodItemId,
+      status: { $in: ['approved', 'active'] }
+    });
+
+    const totalRating = reviews.reduce((sum, rev) => sum + rev.rating, 0);
+    const averageRating = reviews.length > 0 ? (totalRating / reviews.length) : 0;
+
+    await FoodItem.findByIdAndUpdate(foodItemId, {
+      averageRating: parseFloat(averageRating.toFixed(1)),
+      totalReviews: reviews.length,
+      updatedAt: Date.now()
+    });
+    
+    console.log(`✅ Updated rating stats for food item ${foodItemId}: avg=${averageRating.toFixed(1)}, reviews=${reviews.length}`);
+  } catch (error) {
+    console.error('Error updating food item rating stats:', error);
+  }
+}
+
 // Get statistics
 router.get('/stats', async (req, res) => {
   try {
@@ -269,7 +523,7 @@ router.get('/stats', async (req, res) => {
 
     const [totalFoodItems, totalReviews, featuredItems, todaysMenus] = await Promise.all([
       FoodItem.countDocuments({ status: 'active' }),
-      Review.countDocuments({ status: 'approved' }),
+      Review.countDocuments({ status: { $in: ['approved', 'active'] } }),
       FoodItem.countDocuments({ featured: true, status: 'active' }),
       Menu.find({
         date: { $gte: today },

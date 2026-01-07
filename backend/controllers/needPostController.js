@@ -1,6 +1,6 @@
 // controllers/needPostController.js
 const NeedPost = require('../models/NeedPost');
-const Group = require('../models/Group');
+const { Group } = require('../models/Group');
 const Notification = require('../models/Notification');
 const User = require('../models/User');
 
@@ -11,11 +11,27 @@ exports.createNeedPost = async (req, res) => {
     try {
         const user = req.user;
 
+        console.log('🎯 CREATE NEED POST REQUEST:', {
+            userId: user.id,
+            userRole: user.role,
+            body: req.body
+        });
+
         // 🚨 Prevent admins from creating posts
         if (user.role === 'admin') {
+            console.log('❌ Admin trying to create post');
             return res.status(403).json({
                 success: false,
                 message: "Admins cannot create need posts. Use moderation features instead."
+            });
+        }
+
+        // Get the full user from database to get ObjectId
+        const fullUser = await User.findById(user.id);
+        if (!fullUser) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found"
             });
         }
 
@@ -48,14 +64,17 @@ exports.createNeedPost = async (req, res) => {
             });
         }
 
-        // Create the post
+        // Convert maxMembers to number
+        const maxMembersNum = parseInt(maxMembers) || 1;
+
+        // Create the post with fullUser._id for Mongoose
         const needPost = await NeedPost.create({
             title,
             description,
             type,
-            createdBy: user._id,
-            createdByName: user.name,
-            createdByEmail: user.email,
+            createdBy: fullUser._id, // ✅ Use the ObjectId from database
+            createdByName: fullUser.name,
+            createdByEmail: fullUser.email,
             createdByRole: 'student',
             genderPreference,
             subject: type === 'study' ? subject : undefined,
@@ -64,7 +83,7 @@ exports.createNeedPost = async (req, res) => {
             route: type === 'transport' ? route : undefined,
             vehicleType: type === 'transport' ? vehicleType : undefined,
             schedule: type === 'transport' ? schedule : undefined,
-            maxMembers,
+            maxMembers: maxMembersNum,
             currentMembers: 1
         });
 
@@ -192,7 +211,7 @@ exports.expressInterest = async (req, res) => {
         const user = req.user;
 
         console.log('🎯 EXPRESS INTEREST REQUEST:', {
-            user: user._id,
+            userId: user.id,
             userRole: user.role,
             postId: req.params.id,
             body: req.body
@@ -239,7 +258,7 @@ exports.expressInterest = async (req, res) => {
         }
 
         // Check if user is the creator
-        if (post.createdBy.toString() === user._id.toString()) {
+        if (post.createdBy.toString() === user.id) {
             console.log('❌ User is trying to express interest in their own post');
             return res.status(400).json({
                 success: false,
@@ -248,10 +267,15 @@ exports.expressInterest = async (req, res) => {
             });
         }
 
-        // Check if already expressed interest
-        const alreadyInterested = post.interestedUsers.some(
-            interest => interest.userId.toString() === user._id.toString()
-        );
+        // ✅ FIXED: Check if already expressed interest - add null check
+        const alreadyInterested = post.interestedUsers?.some(interest => {
+            // ✅ Check if interest.userId exists before calling toString()
+            if (!interest.userId) {
+                console.log('⚠️ Found interest without userId:', interest);
+                return false; // Skip entries without userId
+            }
+            return interest.userId.toString() === user.id;
+        });
 
         if (alreadyInterested) {
             console.log('❌ User already expressed interest');
@@ -275,16 +299,30 @@ exports.expressInterest = async (req, res) => {
             });
         }
 
+        // Get full user info from database
+        const fullUser = await User.findById(user.id);
+        if (!fullUser) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found"
+            });
+        }
+
         // Add interest
         const newInterest = {
-            userId: user._id,
-            name: user.name,
-            email: user.email,
+            userId: fullUser._id,
+            name: fullUser.name,
+            email: fullUser.email,
             message: message || '',
-            status: 'pending'
+            status: 'pending',
+            requestedAt: new Date()
         };
 
         console.log('➕ Adding interest:', newInterest);
+
+        if (!post.interestedUsers) {
+            post.interestedUsers = [];
+        }
 
         post.interestedUsers.push(newInterest);
         await post.save();
@@ -296,7 +334,7 @@ exports.expressInterest = async (req, res) => {
             user: post.createdBy,
             type: 'post_interest',
             title: 'New Interest in Your Post',
-            message: `${user.name} has expressed interest in your post: "${post.title}"`,
+            message: `${fullUser.name} has expressed interest in your post: "${post.title}"`,
             relatedTo: {
                 modelType: 'NeedPost',
                 itemId: post._id
@@ -329,6 +367,7 @@ exports.expressInterest = async (req, res) => {
 // @desc    Create group from need post
 // @route   POST /api/need-posts/:id/create-group
 // @access  Private (only post creator)
+// In needPostController.js - update createGroupFromPost
 exports.createGroupFromPost = async (req, res) => {
     try {
         const user = req.user;
@@ -353,7 +392,7 @@ exports.createGroupFromPost = async (req, res) => {
         }
 
         // Check if user is the creator
-        if (post.createdBy.toString() !== user._id.toString()) {
+        if (post.createdBy.toString() !== user.id) {
             return res.status(403).json({
                 success: false,
                 message: "Only the post creator can create a group from this post"
@@ -369,12 +408,24 @@ exports.createGroupFromPost = async (req, res) => {
             });
         }
 
-        // Create group with ONLY creator as member
+        // Get full user info
+        const fullUser = await User.findById(user.id);
+        if (!fullUser) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found"
+            });
+        }
+
+        // Determine privacy: transport groups are always private
+        const groupPrivacy = post.type === 'transport' ? 'private' : privacy;
+
+        // Create group
         const group = await Group.create({
             name: groupName || `${post.type} Group for ${post.title}`,
             description: description || post.description,
             type: post.type,
-            privacy: post.type === 'transport' ? 'private' : privacy,
+            privacy: groupPrivacy,
             genderRestriction: post.genderPreference,
             createdFromPost: post._id,
             subject: post.subject,
@@ -382,30 +433,27 @@ exports.createGroupFromPost = async (req, res) => {
             route: post.route,
             vehicleType: post.vehicleType,
             schedule: post.schedule,
-            creator: user._id,
-            creatorName: user.name,
+            creator: fullUser._id,
+            creatorName: fullUser.name,
             creatorRole: 'student',
-            members: [{  // ✅ Only creator initially
-                user: user._id,
-                name: user.name,
-                email: user.email
+            members: [{
+                user: fullUser._id,
+                name: fullUser.name,
+                email: fullUser.email,
+                role: 'moderator' // Creator is a moderator
             }],
             maxMembers: Math.max(2, Math.min(maxMembers, 50)),
             status: 'active'
         });
 
-        // ✅ DO NOT close the post - keep it open
-        // post.status = 'closed';  // ❌ REMOVED
-        await post.save();
-
-        // ✅ Notify interested users to REQUEST to join (not auto-add)
+        // Notify interested users
         for (const interest of post.interestedUsers) {
-            if (interest.status === 'pending') {
+            if (interest.status === 'pending' && interest.userId) {
                 await Notification.create({
                     user: interest.userId,
                     type: 'group_created',
                     title: 'Group Created from Post',
-                    message: `A group has been created from the post "${post.title}" you expressed interest in. You can now request to join the group.`,
+                    message: `A ${groupPrivacy} group has been created from the post "${post.title}" you expressed interest in. ${groupPrivacy === 'private' ? 'You need to request to join.' : 'You can join directly.'}`,
                     relatedTo: {
                         modelType: 'Group',
                         itemId: group._id
@@ -416,7 +464,7 @@ exports.createGroupFromPost = async (req, res) => {
 
         res.status(201).json({
             success: true,
-            message: "Group created successfully! Interested users have been notified to request to join.",
+            message: `Group created successfully! ${groupPrivacy === 'private' ? 'Interested users have been notified to request to join.' : 'Group is open for joining.'}`,
             data: group
         });
     } catch (err) {
@@ -436,7 +484,16 @@ exports.getUserNeedPosts = async (req, res) => {
     try {
         const user = req.user;
 
-        const posts = await NeedPost.find({ createdBy: user._id })
+        // Get full user to get ObjectId
+        const fullUser = await User.findById(user.id);
+        if (!fullUser) {
+            return res.status(404).json({
+                success: false,
+                message: "User not found"
+            });
+        }
+
+        const posts = await NeedPost.find({ createdBy: fullUser._id })
             .sort({ createdAt: -1 });
 
         res.json({
@@ -469,7 +526,7 @@ exports.deleteNeedPost = async (req, res) => {
         }
 
         // Check if user is creator or admin
-        if (post.createdBy.toString() !== user._id.toString() && user.role !== 'admin') {
+        if (post.createdBy.toString() !== user.id && user.role !== 'admin') {
             return res.status(403).json({
                 success: false,
                 message: "Not authorized to delete this post"
@@ -494,9 +551,6 @@ exports.deleteNeedPost = async (req, res) => {
 
 // @desc    Close need post manually
 // @route   PUT /api/need-posts/:id/close
-// @access  Private (post creator only)
-// @desc    Close need post manually
-// @route   PUT /api/need-posts/:id/close
 // @access  Private (post creator or admin)
 exports.closeNeedPost = async (req, res) => {
     try {
@@ -513,7 +567,7 @@ exports.closeNeedPost = async (req, res) => {
         }
 
         // Check if user is creator or admin
-        if (post.createdBy.toString() !== user._id.toString() && user.role !== 'admin') {
+        if (post.createdBy.toString() !== user.id && user.role !== 'admin') {
             return res.status(403).json({
                 success: false,
                 message: "Only post creator or admin can close this post"
